@@ -40,6 +40,6 @@ export function sessionFromRequest(request: Request): Session | null {
 }
 
 /** Secure cookies whenever the app is served over https in production (plain-http localhost still works). */
-export function useSecureCookies(): boolean {
+export function shouldUseSecureCookies(): boolean {
   return process.env.NODE_ENV === "production" && getAppUrl().startsWith("https://");
 }

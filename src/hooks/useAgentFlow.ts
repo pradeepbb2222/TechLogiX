@@ -85,7 +85,9 @@ export function useAgentFlow() {
 
   // Load history on mount; refresh when the tab regains focus or is restored from the back/forward cache.
   useEffect(() => {
+    queueMicrotask(() => {
     void refreshTransactions();
+  });
     const onVisible = () => {
       if (document.visibilityState === "visible") void refreshTransactions();
     };

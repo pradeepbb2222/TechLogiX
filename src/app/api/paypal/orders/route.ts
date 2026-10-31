@@ -5,7 +5,7 @@ import { checkLimit, effectiveLimitCents } from "@/lib/limits";
 import { fromCents, toCents } from "@/lib/money";
 import { createOrder, extractApproveUrl } from "@/lib/paypal/client";
 import { getMaxPendingOrders, getOrderExpiryMs, getPayPalConfig, getServerSpendingLimitCents } from "@/lib/paypal/config";
-import { errorReply, guardMutation, reply, sessionFromRequest, useSecureCookies } from "@/lib/paypal/http";
+import { errorReply, guardMutation, reply, sessionFromRequest, shouldUseSecureCookies } from "@/lib/paypal/http";
 import { newSessionId, sessionCookieHeader, sessionFromId } from "@/lib/security/session";
 import { getStore } from "@/lib/store";
 import { committedCents, type TxRecord } from "@/lib/store/types";
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   const existingSession = sessionFromRequest(request);
   const session = existingSession ?? sessionFromId(newSessionId());
-  const cookieHeaders = existingSession ? undefined : { "Set-Cookie": sessionCookieHeader(session.id, useSecureCookies()) };
+  const cookieHeaders = existingSession ? undefined : { "Set-Cookie": sessionCookieHeader(session.id, shouldUseSecureCookies()) };
 
   try {
     const cfg = getPayPalConfig();
