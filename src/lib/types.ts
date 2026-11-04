@@ -1,3 +1,4 @@
+
 export type PaymentStatus =
   | "not_started"
   | "awaiting_approval"
@@ -13,10 +14,21 @@ export interface Product {
   category: string;
   price: number;
   currency: "USD";
-  rating: number;
-  reviews: number;
-  deliveryDays: number;
+
+  // Actual Channel3 rating data.
+  rating?: number;
+  reviews?: number;
+
+  // Actual product image and merchant offer URL.
+  imageUrl?: string;
+  productUrl: string;
+
+  // Product information from Channel3.
+  description?: string;
   highlights: string[];
+  materials?: string[];
+  structuredAttributes?: Record<string, string[]>;
+
   /** Agent's ranking score (0-100). */
   score?: number;
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { SAMPLE_CATALOG } from "@/lib/catalog";
+import { getChannel3Product } from "@/lib/channel3";
 import { planCheckout, sweepExpired, withCheckoutLock } from "@/lib/checkout/logic";
 import { checkLimit, effectiveLimitCents } from "@/lib/limits";
 import { fromCents, toCents } from "@/lib/money";
@@ -11,8 +11,9 @@ import { getStore } from "@/lib/store";
 import { committedCents, type TxRecord } from "@/lib/store/types";
 
 /**
- * Creates a PayPal Sandbox order. The browser only sends a product id, explicit approval,
- * and an optional (stricter-only) limit hint. Price and currency come from the server catalog.
+ * Creates a PayPal Sandbox order. The browser sends a product id, its reviewed price,
+ * explicit approval, and an optional (stricter-only) limit hint. The server verifies
+ * the reviewed price and uses the latest catalog price and currency.
  * The order is owned by the caller's anonymous session (cookie issued here if missing).
  */
 export async function POST(request: Request) {
@@ -20,11 +21,9 @@ export async function POST(request: Request) {
   if (blocked) return blocked;
 
   const body = (await request.json().catch(() => null)) as
-    | { productId?: unknown; spendingLimit?: unknown; approved?: unknown }
+    | { productId?: unknown; expectedPrice?: unknown; spendingLimit?: unknown; approved?: unknown }
     | null;
 
-  const product = SAMPLE_CATALOG.find((p) => p.id === body?.productId);
-  if (!product) return reply({ status: "failed", message: "Unknown product." }, 400);
   if (body?.approved !== true) return reply({ status: "failed", message: "Explicit user approval is required." }, 403);
 
   const existingSession = sessionFromRequest(request);
@@ -33,6 +32,36 @@ export async function POST(request: Request) {
 
   try {
     const cfg = getPayPalConfig();
+    const product = await getChannel3Product(
+  typeof body?.productId === "string" ? body.productId : "",
+);
+
+if (!product) {
+  return reply(
+    { status: "failed", message: "Product is unavailable or no longer in stock." },
+    404,
+    cookieHeaders,
+  );
+}
+
+const expectedPrice = body?.expectedPrice;
+
+if (
+  typeof expectedPrice !== "number" ||
+  !Number.isFinite(expectedPrice) ||
+  expectedPrice <= 0 ||
+  toCents(expectedPrice) !== toCents(product.price)
+) {
+  return reply(
+    {
+      status: "failed",
+      message:
+        "The product price has changed or is invalid. Please review the latest price before approving again.",
+    },
+    409,
+    cookieHeaders,
+  );
+}
     const store = getStore();
 
     // Repeated clicks: only one checkout per session + product may be in progress at a time.

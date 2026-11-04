@@ -31,8 +31,17 @@ export function verifyCapturedOrder(
   const capture = captures.find((c) => c.status === "COMPLETED");
   if (!capture?.id) return { ok: false, reason: "No completed capture found." };
 
-  const cents = Math.round(Number.parseFloat(capture.amount?.value ?? "NaN") * 100);
-  if (cents !== expected.amountCents) return { ok: false, reason: "Captured amount does not match the order." };
+  const rawAmount = capture.amount?.value;
+
+if (typeof rawAmount !== "string" || !/^\d+(?:\.\d{1,2})?$/.test(rawAmount)) {
+  return { ok: false, reason: "Captured amount has an invalid format." };
+}
+
+const cents = Math.round(Number(rawAmount) * 100);
+
+if (cents !== expected.amountCents) {
+  return { ok: false, reason: "Captured amount does not match the order." };
+}
   if (capture.amount?.currency_code !== expected.currency) return { ok: false, reason: "Captured currency does not match." };
 
   return { ok: true, captureId: capture.id };

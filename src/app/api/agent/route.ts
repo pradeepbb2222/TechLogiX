@@ -1,12 +1,45 @@
+
 import { NextResponse } from "next/server";
+import { understandShoppingRequest } from "@/lib/gemini";
 import { searchProducts } from "@/lib/agent";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { message?: unknown; spendingLimit?: unknown } | null;
-  const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (!message || message.length > 500) {
-    return NextResponse.json({ error: "Message must be 1-500 characters." }, { status: 400 });
+  try {
+    const body = (await request.json().catch(() => null)) as {
+      message?: unknown;
+    } | null;
+
+    const message =
+      typeof body?.message === "string" ? body.message.trim() : "";
+
+    if (!message || message.length > 500) {
+      return NextResponse.json(
+        { error: "Message must be 1-500 characters." },
+        { status: 400 },
+      );
+    }
+
+    const geminiStart = Date.now();
+const intent = await understandShoppingRequest(message);
+console.log(`[TIMING] Gemini: ${((Date.now() - geminiStart) / 1000).toFixed(2)}s`);
+console.log("[GEMINI INTENT]", JSON.stringify(intent, null, 2));
+
+const channel3Start = Date.now();
+const result = await searchProducts(intent);
+console.log(`[TIMING] Channel3 + ranking: ${((Date.now() - channel3Start) / 1000).toFixed(2)}s`);
+
+    return NextResponse.json({
+      ...result,
+      intent,
+    });
+  } catch (error) {
+    console.error("Agent API error:", error);
+
+    return NextResponse.json(
+      {
+        error: "Unable to process your request. Please try again.",
+      },
+      { status: 500 },
+    );
   }
-  const limit = typeof body?.spendingLimit === "number" && body.spendingLimit > 0 ? body.spendingLimit : undefined;
-  return NextResponse.json(searchProducts(message, limit));
 }

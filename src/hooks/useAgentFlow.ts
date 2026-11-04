@@ -191,13 +191,23 @@ export function useAgentFlow() {
       const res = await fetch("/api/paypal/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selected.id, spendingLimit, approved: true }),
+        body: JSON.stringify({
+  productId: selected.id,
+  expectedPrice: selected.price,
+  spendingLimit,
+  approved: true,
+}),
       });
       const data = (await res.json()) as PaymentResponse & { approveUrl?: string };
       if (!res.ok || !data.approveUrl) {
-        fail(data.message || "Could not create the PayPal order.");
-        return;
-      }
+  fail(data.message || "Could not create the PayPal order.");
+
+  if (res.status === 409) {
+    log("Price changed — search again to review the latest price.", "warning");
+  }
+
+  return;
+}
       // Keep the shopping context so the user can return to it after PayPal (tab-local storage).
       const ctx: CheckoutContext = { products, recommendedId, selectedId: selected.id, spendingLimit };
       try {

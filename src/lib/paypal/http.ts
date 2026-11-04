@@ -18,7 +18,7 @@ export function errorReply(err: unknown) {
     console.error(`[paypal] ${err.httpStatus} ${err.issue ?? ""} debug_id=${err.debugId ?? "n/a"}`);
     return reply({ status: "failed", message: `${err.message}${err.debugId ? ` (PayPal debug id: ${err.debugId})` : ""}` }, 502);
   }
-  console.error("[agentflow] unexpected error:", err instanceof Error ? err.message : "unknown");
+  console.error("[agentflow] unexpected error:", err);
   return reply({ status: "failed", message: "Unexpected server error. No money was moved." }, 500);
 }
 

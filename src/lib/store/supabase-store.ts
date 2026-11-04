@@ -77,9 +77,25 @@ export function createSupabaseStore(url: string, serviceKey: string): TxStore {
       return (await request("?select=*&order=created_at.desc&limit=100")).map(fromRow);
     },
     async listByOwner(ownerHash) {
-      // Ownerless (legacy) rows can never match an eq filter on a real hash.
-      return (await request(`?owner_hash=eq.${encodeURIComponent(ownerHash)}&select=*&order=created_at.desc&limit=100`)).map(fromRow);
-    },
+  // Fetch every transaction belonging to this session in pages of 100.
+  const pageSize = 100;
+  const allRows: Row[] = [];
+  let offset = 0;
+
+  while (true) {
+    const rows = await request(
+      `?owner_hash=eq.${encodeURIComponent(ownerHash)}&select=*&order=created_at.desc&limit=${pageSize}&offset=${offset}`
+    );
+
+    allRows.push(...rows);
+
+    if (rows.length < pageSize) break;
+
+    offset += pageSize;
+  }
+
+  return allRows.map(fromRow);
+},
     async expireStale(beforeIso, note) {
       // Single conditional UPDATE restricted to awaiting_approval: other statuses can never match.
       const rows = await request(`?status=eq.awaiting_approval&updated_at=lt.${encodeURIComponent(beforeIso)}`, {

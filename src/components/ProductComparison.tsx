@@ -6,7 +6,7 @@ export function ProductComparison({ products, recommendedId, selectedId, spendin
   products: Product[]; recommendedId: string | null; selectedId: string | null; spendingLimit: number; onSelect: (id: string) => void;
 }) {
   return (
-    <Card title="Product Comparison" action={<span className="text-xs text-slate-400">Sample catalog data</span>}>
+    <Card title="Product Comparison" action={<span className="text-xs text-slate-400">Live product results</span>}>
       {products.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
           No products yet. Ask the assistant to find something.
