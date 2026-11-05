@@ -29,19 +29,45 @@ async function getAccessToken(cfg: PayPalConfig): Promise<string> {
   if (cached && Date.now() < cached.expiresAt - 60_000) return cached.value;
 
   const basic = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64");
+
   const res = await fetch(`${cfg.baseUrl}/v1/oauth2/token`, {
     method: "POST",
-    headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
     body: "grant_type=client_credentials",
     cache: "no-store",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!res.ok) {
-    const hint = res.status === 401 ? "PayPal rejected the Sandbox credentials. Re-check the AgentFlow app Client ID/Secret." : "PayPal authentication failed.";
-    throw new PayPalApiError(hint, res.status, undefined, res.headers.get("paypal-debug-id") ?? undefined);
+
+  const raw = await res.text();
+
+  let data: { access_token?: string; expires_in?: number; error_description?: string };
+
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new PayPalApiError(
+      `PayPal returned an invalid authentication response (HTTP ${res.status}).`,
+      res.status,
+    );
   }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  globalCache.__agentflowPayPalToken = { value: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+
+  if (!res.ok || !data.access_token) {
+    const hint =
+      res.status === 401
+        ? "PayPal rejected the Sandbox credentials. Re-check the AgentFlow app Client ID/Secret."
+        : data.error_description || "PayPal authentication failed.";
+
+    throw new PayPalApiError(hint, res.status);
+  }
+
+  globalCache.__agentflowPayPalToken = {
+    value: data.access_token,
+    expiresAt: Date.now() + (data.expires_in ?? 300) * 1000,
+  };
+
   return data.access_token;
 }
 
