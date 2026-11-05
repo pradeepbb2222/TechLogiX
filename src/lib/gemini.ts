@@ -35,7 +35,7 @@ const productRankingSchema = z.object({
 export type ProductRanking = z.infer<typeof productRankingSchema>;
 
 function getGeminiModel() {
-  return google("gemini-3.8-flash");
+  return google("gemini-3.6-flash");
 }
 
 export async function understandShoppingRequest(
