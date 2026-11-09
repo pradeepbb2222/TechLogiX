@@ -51,5 +51,6 @@ next-env.d.ts
 # Private credentials
 *credentials*.txt
 PayPal REST API Credentials.txt
+ChatGPT API Key.txt
 # OAuth credentials
 OAuth Client Credentials.json

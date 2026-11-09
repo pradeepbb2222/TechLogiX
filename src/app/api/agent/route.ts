@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { understandShoppingRequest } from "@/lib/gemini";
 import { searchProducts } from "@/lib/agent";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
+import { understandShoppingRequestFallback } from "@/lib/fallback-intent";
 
 export async function POST(request: Request) {
   try {
@@ -30,11 +31,23 @@ export async function POST(request: Request) {
     }
 
     const geminiStart = Date.now();
-    const intent = await understandShoppingRequest(message);
+let intent;
+let usedFallback = false;
 
-    console.log(
-      `[TIMING] Gemini: ${((Date.now() - geminiStart) / 1000).toFixed(2)}s`,
-    );
+try {
+  intent = await understandShoppingRequest(message);
+
+  console.log(
+    `[TIMING] Gemini intent: ${((Date.now() - geminiStart) / 1000).toFixed(2)}s`,
+  );
+} catch (error) {
+  console.error("Gemini intent extraction failed:", error);
+
+  usedFallback = true;
+  intent = understandShoppingRequestFallback(message);
+
+  console.log("[AGENT] Rule-based intent fallback activated.");
+}
 
     const channel3Start = Date.now();
     const result = await searchProducts(intent);
@@ -44,9 +57,10 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({
-      ...result,
-      intent,
-    });
+  ...result,
+  intent,
+  usedFallback,
+});
   } catch (error) {
     console.error("Agent API error:", error);
 

@@ -54,7 +54,7 @@ export async function understandShoppingRequest(
   }
 
   const { output } = await generateText({
-    timeout: { totalMs: 90_000 },
+    timeout: { totalMs: 15_000 },
     maxRetries: 0,
     model: getGeminiModel(),
     output: Output.object({
@@ -119,8 +119,8 @@ export async function rankProducts(
   }));
 
   const { output } = await generateText({
-    timeout: { totalMs: 90_000 },
-    maxRetries: 2,
+    timeout: { totalMs: 15_000 },
+    maxRetries: 0,
     model: getGeminiModel(),
     output: Output.object({
       schema: productRankingSchema,
