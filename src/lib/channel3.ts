@@ -19,18 +19,22 @@ function getClient() {
 export async function searchChannel3Products(
   query: string,
   limit = 20,
+  categorySlug?: string,
 ): Promise<Product[]> {
   const client = getClient();
 
   const response = await client.products.search({
-    query,
-    limit: Math.min(Math.max(limit, 1), 30),
-    config: {
-      country: "US",
-      currency: "USD",
-      language: "en",
-    },
-  });
+  query,
+  limit: Math.min(Math.max(limit, 1), 30),
+  ...(categorySlug
+    ? { filters: { category_ids: [categorySlug] } }
+    : {}),
+  config: {
+    country: "US",
+    currency: "USD",
+    language: "en",
+  },
+});
   
   return response.data
     .map((item): Product | null => {
@@ -124,4 +128,60 @@ export async function getChannel3Product(
     materials: item.materials ?? undefined,
     structuredAttributes: item.structured_attributes ?? undefined,
   };
+}
+
+export async function inspectChannel3Categories() {
+  const client = getClient();
+
+  const firstPage = await client.categories.list({
+    page: 1,
+    page_size: 100,
+  });
+
+  const total = firstPage.response.total;
+  const totalPages = Math.ceil(total / 100);
+
+  const keywords = [
+    "headphone",
+    "earphone",
+    "audio",
+    "smartphone",
+    "mobile",
+    "cell phone",
+    "laptop",
+    "computer",
+  ];
+
+  console.log("TOTAL CHANNEL3 CATEGORIES:", total);
+
+  for (let page = 1; page <= totalPages; page++) {
+    const result =
+      page === 1
+        ? firstPage
+        : await client.categories.list({
+            page,
+            page_size: 100,
+          });
+
+    const matches = result.data.filter((category) => {
+      const text =
+        `${category.title} ${category.slug}`.toLowerCase();
+
+      return keywords.some((keyword) =>
+        text.includes(keyword),
+      );
+    });
+
+    if (matches.length > 0) {
+      console.log(
+        `MATCHING CATEGORIES — PAGE ${page}:`,
+        matches.map((category) => ({
+          title: category.title,
+          slug: category.slug,
+        })),
+      );
+    }
+  }
+
+  console.log("CATEGORY INSPECTION COMPLETED");
 }

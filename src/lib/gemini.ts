@@ -6,10 +6,25 @@ import type { Product } from "./types";
 
 const shoppingIntentSchema = z.object({
   category: z.string().nullable(),
+
   budget: z.number().positive().nullable(),
+
   keywords: z.array(z.string()),
+
   preferences: z.array(z.string()),
+
+  hardRequirements: z.array(
+    z.object({
+      attribute: z.string(),
+      operator: z.enum(["min", "max", "equals", "contains"]),
+      value: z.string(),
+      unit: z.string().nullable(),
+      mandatory: z.boolean(),
+    }),
+  ),
+
   needsClarification: z.boolean(),
+
   clarificationQuestion: z.string().nullable(),
 });
 
@@ -21,13 +36,6 @@ const productRankingSchema = z.object({
       productId: z.string(),
       score: z.number().min(0).max(100),
       reason: z.string(),
-      requirements: z.array(
-        z.object({
-          requirement: z.string(),
-          status: z.enum(["verified", "unknown", "mismatch"]),
-          evidence: z.string(),
-        }),
-      ),
     }),
   ),
 });
@@ -35,7 +43,7 @@ const productRankingSchema = z.object({
 export type ProductRanking = z.infer<typeof productRankingSchema>;
 
 function getGeminiModel() {
-  return google("gemini-3.6-flash");
+  return google("gemini-3.8-flash");
 }
 
 export async function understandShoppingRequest(
@@ -46,29 +54,39 @@ export async function understandShoppingRequest(
   }
 
   const { output } = await generateText({
-    timeout: { totalMs: 45_000 },
-    maxRetries: 2,
+    timeout: { totalMs: 90_000 },
+    maxRetries: 0,
     model: getGeminiModel(),
     output: Output.object({
       schema: shoppingIntentSchema,
       name: "shopping_intent",
       description: "Structured requirements extracted from a shopping request",
     }),
-    system: `
-      You are the intent-understanding engine of PayPal AgentFlow.
+  system: `
+  You are the intent-understanding engine of PayPal AgentFlow.
 
-      Extract the user's actual shopping requirements.
+  Extract the user's actual shopping requirements.
 
-      Rules:
-      - Extract the product category.
-      - Extract the maximum budget in USD.
-      - Never invent a budget.
-      - Separate product keywords from preferences.
-      - Do not invent product specifications.
-      - Ask one concise clarification question if necessary.
-      - Do not recommend actual products.
-    `,
-    prompt: message,
+  RULES:
+  - Extract the product category.
+  - Extract the maximum budget in USD.
+  - Never invent a budget.
+  - Separate product keywords from preferences.
+  - Extract every explicitly stated mandatory specification
+    into hardRequirements.
+  - Use "min" for requirements such as at least, minimum,
+    greater than or equal to.
+  - Use "max" for requirements such as at most, maximum,
+    less than or equal to.
+  - Use "equals" for exact numerical or categorical requirements.
+  - Use "contains" for explicitly required features or text.
+  - Preserve numerical values and units accurately.
+  - Set mandatory to true only for explicit requirements.
+  - Put optional preferences in preferences, not hardRequirements.
+  - Do not invent product specifications.
+  - Ask one concise clarification question if necessary.
+  - Do not recommend actual products.
+`,prompt: message,
   });
 
   if (!output) {
@@ -101,7 +119,7 @@ export async function rankProducts(
   }));
 
   const { output } = await generateText({
-    timeout: { totalMs: 45_000 },
+    timeout: { totalMs: 90_000 },
     maxRetries: 2,
     model: getGeminiModel(),
     output: Output.object({
@@ -146,7 +164,6 @@ export async function rankProducts(
       OUTPUT:
       - Return every supplied product exactly once.
       - Copy product IDs exactly as supplied.
-      - Include a requirement entry for each important user requirement.
       - Give a concise evidence explanation for every requirement.
       - Do not invent products or product IDs.
     `,
@@ -157,8 +174,28 @@ export async function rankProducts(
   });
 
   if (!output) {
-    throw new Error("Gemini did not return valid product rankings.");
-  }
+  throw new Error("Gemini did not return valid product rankings.");
+}
 
-  return output;
+const allowedProductIds = new Set(
+  products.map((product) => product.id),
+);
+
+const returnedProductIds = output.rankings.map(
+  (ranking) => ranking.productId,
+);
+
+const invalidProductIds = returnedProductIds.filter(
+  (id) => !allowedProductIds.has(id),
+);
+
+if (invalidProductIds.length > 0) {
+  console.error("GEMINI RETURNED INVALID PRODUCT IDS:", invalidProductIds);
+
+  throw new Error(
+    "Gemini returned product IDs that were not supplied to the ranking engine.",
+  );
+}
+
+return output;
 }

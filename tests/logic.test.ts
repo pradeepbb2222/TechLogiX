@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkLimit, effectiveLimitCents } from "../src/lib/limits.ts";
-import { fromCents, toCents } from "../src/lib/money.ts";
-import { verifyCapturedOrder, type PayPalOrder } from "../src/lib/paypal/verify.ts";
+import { checkLimit, effectiveLimitCents } from "../src/lib/limits";
+import { fromCents, toCents } from "../src/lib/money";
+import { verifyCapturedOrder, type PayPalOrder } from "../src/lib/paypal/verify";
 
 const expected = { orderId: "ORD123456789", amountCents: 7999, currency: "USD" };
 const goodOrder = (): PayPalOrder => ({

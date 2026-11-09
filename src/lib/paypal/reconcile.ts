@@ -1,52 +1,104 @@
+
 import type { TxPatch, TxRecord, TxStore } from "../store/types";
 import type { OrderOutcome } from "./verify";
 
 /**
- * Applies a PayPal-derived outcome to a stored transaction. Dependencies are limited to
- * type imports so this stays unit-testable with an in-memory store.
+ * Applies a PayPal-derived outcome to a stored transaction.
  *
- * Rules: a record only becomes `completed` from a verified capture, and only becomes
- * `failed` when PayPal definitively says so. Anything uncertain stays `processing`.
+ * A record only becomes completed from a verified capture.
+ * A record only becomes failed when PayPal definitively says so.
+ * Uncertain outcomes remain processing.
+ *
+ * Every read and update is scoped to the authenticated transaction owner.
  */
 
-/** A `processing` record untouched for longer than this is reconciled with PayPal. */
 export const STALE_PROCESSING_MS = 60_000;
 
 export function isStale(record: TxRecord, now = Date.now()): boolean {
   return now - Date.parse(record.updatedAt) > STALE_PROCESSING_MS;
 }
 
-export async function retry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 200): Promise<T> {
+export async function retry<T>(
+  fn: () => Promise<T>,
+  attempts = 3,
+  baseDelayMs = 200,
+): Promise<T> {
   let lastError: unknown;
+
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
       lastError = err;
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** i));
+
+      if (i < attempts - 1) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, baseDelayMs * 2 ** i),
+        );
+      }
     }
   }
+
   throw lastError;
 }
 
-async function current(store: TxStore, record: TxRecord): Promise<TxRecord> {
-  return (await retry(() => store.get(record.orderId))) ?? record;
+async function current(
+  store: TxStore,
+  record: TxRecord,
+): Promise<TxRecord> {
+  if (!record.userId) return record;
+
+  return (
+    (await retry(() => store.get(record.orderId, record.userId!))) ??
+    record
+  );
 }
 
-/** Conditional update from `processing`; null means someone else already moved it. */
-async function fromProcessing(store: TxStore, record: TxRecord, patch: TxPatch): Promise<TxRecord> {
-  const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as TxPatch;
-  const updated = await retry(() => store.transition(record.orderId, ["processing"], clean));
+/** Conditional update from processing; null means another request moved it. */
+async function fromProcessing(
+  store: TxStore,
+  record: TxRecord,
+  patch: TxPatch,
+): Promise<TxRecord> {
+  if (!record.userId) return record;
+
+  const clean = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as TxPatch;
+
+  const updated = await retry(() =>
+    store.transition(
+      record.orderId,
+      record.userId!,
+      ["processing"],
+      clean,
+    ),
+  );
+
   return updated ?? current(store, record);
 }
 
-/** Persists the PayPal capture id immediately; best effort, never throws. */
-export async function saveCaptureId(store: TxStore, record: TxRecord, captureId?: string): Promise<void> {
-  if (!captureId || record.captureId === captureId) return;
+/** Persists the PayPal capture ID immediately; best effort, never throws. */
+export async function saveCaptureId(
+  store: TxStore,
+  record: TxRecord,
+  captureId?: string,
+): Promise<void> {
+  if (!captureId || record.captureId === captureId || !record.userId) {
+    return;
+  }
+
   try {
-    await retry(() => store.transition(record.orderId, ["processing"], { captureId }));
+    await retry(() =>
+      store.transition(
+        record.orderId,
+        record.userId!,
+        ["processing"],
+        { captureId },
+      ),
+    );
   } catch {
-    // The final update below carries the capture id too.
+    // The final update below carries the capture ID too.
   }
 }
 
@@ -56,9 +108,12 @@ export async function settleOutcome(
   outcome: OrderOutcome,
   opts: { allowRelease: boolean },
 ): Promise<TxRecord> {
+  if (!record.userId) return record;
+
   switch (outcome.kind) {
     case "completed":
       await saveCaptureId(store, record, outcome.captureId);
+
       return fromProcessing(store, record, {
         status: "completed",
         captureId: outcome.captureId,
@@ -67,6 +122,7 @@ export async function settleOutcome(
 
     case "pending":
       await saveCaptureId(store, record, outcome.captureId);
+
       return fromProcessing(store, record, {
         captureId: outcome.captureId,
         note: "PayPal reports the capture as pending. The payment outcome is being verified and will be re-checked.",
@@ -74,6 +130,7 @@ export async function settleOutcome(
 
     case "failed":
       await saveCaptureId(store, record, outcome.captureId);
+
       return fromProcessing(store, record, {
         status: "failed",
         captureId: outcome.captureId,
@@ -82,13 +139,12 @@ export async function settleOutcome(
 
     case "not_captured":
       if (opts.allowRelease) {
-        // PayPal confirms nothing was captured: release the claim. A retry reuses the same
-        // PayPal-Request-Id, so it cannot create a second capture.
         return fromProcessing(store, record, {
           status: "awaiting_approval",
           note: "PayPal confirmed no capture occurred. Reload this page to retry.",
         });
       }
+
       return keepProcessing(store, record, "no capture data yet");
 
     case "unknown":
@@ -96,8 +152,12 @@ export async function settleOutcome(
   }
 }
 
-/** Keeps `processing` and refreshes `updatedAt`, which also throttles the next reconciliation. */
-export function keepProcessing(store: TxStore, record: TxRecord, reason: string): Promise<TxRecord> {
+/** Keeps processing and refreshes updatedAt to throttle reconciliation. */
+export function keepProcessing(
+  store: TxStore,
+  record: TxRecord,
+  reason: string,
+): Promise<TxRecord> {
   return fromProcessing(store, record, {
     note: `Payment outcome is being verified with PayPal (${reason}). Do not pay again; check back shortly.`,
   });

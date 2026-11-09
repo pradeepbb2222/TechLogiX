@@ -7,6 +7,16 @@ export type PaymentStatus =
   | "failed"
   | "cancelled";
 
+export type RequirementStatus =
+  | "verified"
+  | "unknown"
+  | "mismatch";
+
+export interface ProductRequirement {
+  requirement: string;
+  status: RequirementStatus;
+  evidence: string;
+}
 export interface Product {
   id: string;
   name: string;
@@ -31,6 +41,16 @@ export interface Product {
 
   /** Agent's ranking score (0-100). */
   score?: number;
+
+
+    /** AI-generated explanation for the product's ranking. */
+  aiReason?: string;
+
+  /** Evidence showing whether requirements are satisfied. */
+  requirements?: ProductRequirement[];
+
+  /** Whether the product passes all mandatory requirements. */
+  isEligible?: boolean;
 }
 
 export interface ChatMessage {
