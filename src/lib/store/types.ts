@@ -1,3 +1,4 @@
+
 import type { PaymentStatus, Transaction } from "../types";
 
 /** Server-side transaction record. Amounts are integer cents. */
@@ -9,8 +10,10 @@ export interface TxRecord {
   amountCents: number;
   currency: "USD";
   limitCents: number;
-  /** SHA-256 hash of the owning browser session id. Absent on legacy records, which are never exposed. */
-  ownerHash?: string;
+
+  /** Null only for legacy transactions created before authenticated ownership. */
+  userId: string | null;
+
   status: PaymentStatus;
   note?: string;
   captureId?: string;
@@ -18,7 +21,14 @@ export interface TxRecord {
   updatedAt: string;
 }
 
-export type TxPatch = Partial<Pick<TxRecord, "status" | "note" | "captureId">>;
+/** New transactions must always belong to an authenticated user. */
+export type NewTxRecord = Omit<TxRecord, "userId"> & {
+  userId: string;
+};
+
+export type TxPatch = Partial<
+  Pick<TxRecord, "status" | "note" | "captureId">
+>;
 
 export class DuplicateOrderError extends Error {
   constructor(orderId: string) {
@@ -28,22 +38,31 @@ export class DuplicateOrderError extends Error {
 
 export interface TxStore {
   kind: "supabase" | "file";
-  create(record: TxRecord): Promise<void>;
-  get(orderId: string): Promise<TxRecord | null>;
-  list(): Promise<TxRecord[]>;
-  /** Only the given session's records. Legacy records without an owner are never returned. */
-  listByOwner(ownerHash: string): Promise<TxRecord[]>;
+
+  create(record: NewTxRecord): Promise<void>;
+
+  /** Retrieves an order only if it belongs to the specified user. */
+  get(orderId: string, userId: string): Promise<TxRecord | null>;
+
+  /** Returns every transaction belonging to the specified user. */
+  listByUser(userId: string): Promise<TxRecord[]>;
+
   /**
-   * Atomically cancels `awaiting_approval` records last updated before `beforeIso`.
-   * Never affects any other status. Returns the number of records expired.
+   * Atomically cancels stale pending records.
+   * This is a server-only global maintenance operation.
    */
   expireStale(beforeIso: string, note: string): Promise<number>;
+
   /**
-   * Atomic compare-and-set: applies `patch` only if the current status is in `from`.
-   * Returns the updated record, or null if the precondition failed (e.g. already claimed).
-   * This is what prevents duplicate captures.
+   * Atomic, user-scoped compare-and-set.
+   * Updates only if the order belongs to userId and its status matches.
    */
-  transition(orderId: string, from: PaymentStatus[], patch: TxPatch): Promise<TxRecord | null>;
+  transition(
+    orderId: string,
+    userId: string,
+    from: PaymentStatus[],
+    patch: TxPatch,
+  ): Promise<TxRecord | null>;
 }
 
 export function toTransaction(r: TxRecord): Transaction {
@@ -59,9 +78,16 @@ export function toTransaction(r: TxRecord): Transaction {
   };
 }
 
-/** Cents already spent or in flight (completed + processing), optionally excluding one order. */
-export function committedCents(records: TxRecord[], excludeOrderId?: string): number {
+/** Cents already spent or in flight (completed + processing), excluding an optional order. */
+export function committedCents(
+  records: TxRecord[],
+  excludeOrderId?: string,
+): number {
   return records
-    .filter((r) => r.orderId !== excludeOrderId && (r.status === "completed" || r.status === "processing"))
+    .filter(
+      (r) =>
+        r.orderId !== excludeOrderId &&
+        (r.status === "completed" || r.status === "processing"),
+    )
     .reduce((sum, r) => sum + r.amountCents, 0);
 }

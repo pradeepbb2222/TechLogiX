@@ -2,9 +2,19 @@
 import { NextResponse } from "next/server";
 import { understandShoppingRequest } from "@/lib/gemini";
 import { searchProducts } from "@/lib/agent";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please sign in to use AgentFlow." },
+        { status: 401 },
+      );
+    }
+
     const body = (await request.json().catch(() => null)) as {
       message?: unknown;
     } | null;
@@ -20,13 +30,18 @@ export async function POST(request: Request) {
     }
 
     const geminiStart = Date.now();
-const intent = await understandShoppingRequest(message);
-console.log(`[TIMING] Gemini: ${((Date.now() - geminiStart) / 1000).toFixed(2)}s`);
-console.log("[GEMINI INTENT]", JSON.stringify(intent, null, 2));
+    const intent = await understandShoppingRequest(message);
 
-const channel3Start = Date.now();
-const result = await searchProducts(intent);
-console.log(`[TIMING] Channel3 + ranking: ${((Date.now() - channel3Start) / 1000).toFixed(2)}s`);
+    console.log(
+      `[TIMING] Gemini: ${((Date.now() - geminiStart) / 1000).toFixed(2)}s`,
+    );
+
+    const channel3Start = Date.now();
+    const result = await searchProducts(intent);
+
+    console.log(
+      `[TIMING] Channel3 + ranking: ${((Date.now() - channel3Start) / 1000).toFixed(2)}s`,
+    );
 
     return NextResponse.json({
       ...result,

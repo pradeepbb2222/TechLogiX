@@ -1,7 +1,13 @@
-import type { PaymentStatus } from "../types";
-import type { TxPatch, TxRecord, TxStore } from "./types";
 
-/** Supabase/PostgreSQL store via PostgREST. Uses the service-role key, server-side only. See supabase/schema.sql. */
+import type { PaymentStatus } from "../types";
+import type {
+  NewTxRecord,
+  TxPatch,
+  TxRecord,
+  TxStore,
+} from "./types";
+
+/** Supabase/PostgreSQL store via PostgREST. Server-side service-role access only. */
 
 interface Row {
   order_id: string;
@@ -12,6 +18,7 @@ interface Row {
   currency: "USD";
   limit_cents: number;
   owner_hash: string | null;
+  user_id: string | null;
   status: PaymentStatus;
   note: string | null;
   capture_id: string | null;
@@ -27,7 +34,7 @@ const fromRow = (r: Row): TxRecord => ({
   amountCents: r.amount_cents,
   currency: r.currency,
   limitCents: r.limit_cents,
-  ownerHash: r.owner_hash ?? undefined,
+  userId: r.user_id,
   status: r.status,
   note: r.note ?? undefined,
   captureId: r.capture_id ?? undefined,
@@ -35,23 +42,44 @@ const fromRow = (r: Row): TxRecord => ({
   updatedAt: r.updated_at,
 });
 
-export function createSupabaseStore(url: string, serviceKey: string): TxStore {
+export function createSupabaseStore(
+  url: string,
+  serviceKey: string,
+): TxStore {
   const base = `${url.replace(/\/+$/, "")}/rest/v1/transactions`;
-  const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" };
 
-  async function request(query: string, init: RequestInit & { prefer?: string } = {}): Promise<Row[]> {
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    "Content-Type": "application/json",
+  };
+
+  async function request(
+    query: string,
+    init: RequestInit & { prefer?: string } = {},
+  ): Promise<Row[]> {
     const res = await fetch(`${base}${query}`, {
       ...init,
       cache: "no-store",
-      headers: { ...headers, ...(init.prefer ? { Prefer: init.prefer } : {}) },
+      headers: {
+        ...headers,
+        ...(init.prefer ? { Prefer: init.prefer } : {}),
+      },
     });
-    if (!res.ok) throw new Error(`Supabase request failed (${res.status}).`);
-    return res.status === 204 ? [] : ((await res.json()) as Row[]);
+
+    if (!res.ok) {
+      throw new Error(`Supabase request failed (${res.status}).`);
+    }
+
+    return res.status === 204
+      ? []
+      : ((await res.json()) as Row[]);
   }
 
   return {
     kind: "supabase",
-    async create(r) {
+
+    async create(r: NewTxRecord) {
       await request("", {
         method: "POST",
         prefer: "return=minimal",
@@ -63,60 +91,90 @@ export function createSupabaseStore(url: string, serviceKey: string): TxStore {
           amount_cents: r.amountCents,
           currency: r.currency,
           limit_cents: r.limitCents,
-          owner_hash: r.ownerHash ?? null,
+          user_id: r.userId,
           status: r.status,
           note: r.note ?? null,
         }),
       });
     },
-    async get(orderId) {
-      const rows = await request(`?order_id=eq.${encodeURIComponent(orderId)}&select=*`);
+
+    async get(orderId: string, userId: string) {
+      const rows = await request(
+        `?order_id=eq.${encodeURIComponent(orderId)}` +
+          `&user_id=eq.${encodeURIComponent(userId)}&select=*`,
+      );
+
       return rows[0] ? fromRow(rows[0]) : null;
     },
-    async list() {
-      return (await request("?select=*&order=created_at.desc&limit=100")).map(fromRow);
+
+    async listByUser(userId: string) {
+      const pageSize = 100;
+      const allRows: Row[] = [];
+      let offset = 0;
+
+      while (true) {
+        const rows = await request(
+          `?user_id=eq.${encodeURIComponent(userId)}` +
+            `&select=*&order=created_at.desc` +
+            `&limit=${pageSize}&offset=${offset}`,
+        );
+
+        allRows.push(...rows);
+
+        if (rows.length < pageSize) break;
+
+        offset += pageSize;
+      }
+
+      return allRows.map(fromRow);
     },
-    async listByOwner(ownerHash) {
-  // Fetch every transaction belonging to this session in pages of 100.
-  const pageSize = 100;
-  const allRows: Row[] = [];
-  let offset = 0;
 
-  while (true) {
-    const rows = await request(
-      `?owner_hash=eq.${encodeURIComponent(ownerHash)}&select=*&order=created_at.desc&limit=${pageSize}&offset=${offset}`
-    );
+    async expireStale(beforeIso: string, note: string) {
+      const rows = await request(
+        `?status=eq.awaiting_approval` +
+          `&updated_at=lt.${encodeURIComponent(beforeIso)}`,
+        {
+          method: "PATCH",
+          prefer: "return=representation",
+          body: JSON.stringify({
+            status: "cancelled",
+            note,
+            updated_at: new Date().toISOString(),
+          }),
+        },
+      );
 
-    allRows.push(...rows);
-
-    if (rows.length < pageSize) break;
-
-    offset += pageSize;
-  }
-
-  return allRows.map(fromRow);
-},
-    async expireStale(beforeIso, note) {
-      // Single conditional UPDATE restricted to awaiting_approval: other statuses can never match.
-      const rows = await request(`?status=eq.awaiting_approval&updated_at=lt.${encodeURIComponent(beforeIso)}`, {
-        method: "PATCH",
-        prefer: "return=representation",
-        body: JSON.stringify({ status: "cancelled", note, updated_at: new Date().toISOString() }),
-      });
       return rows.length;
     },
-    async transition(orderId: string, from: PaymentStatus[], patch: TxPatch) {
-      // Single conditional UPDATE: only one concurrent caller can match the status filter.
-      const rows = await request(`?order_id=eq.${encodeURIComponent(orderId)}&status=in.(${from.join(",")})`, {
-        method: "PATCH",
-        prefer: "return=representation",
-        body: JSON.stringify({
-          ...(patch.status !== undefined && { status: patch.status }),
-          ...(patch.note !== undefined && { note: patch.note }),
-          ...(patch.captureId !== undefined && { capture_id: patch.captureId }),
-          updated_at: new Date().toISOString(),
-        }),
-      });
+
+    async transition(
+      orderId: string,
+      userId: string,
+      from: PaymentStatus[],
+      patch: TxPatch,
+    ) {
+      const rows = await request(
+        `?order_id=eq.${encodeURIComponent(orderId)}` +
+          `&user_id=eq.${encodeURIComponent(userId)}` +
+          `&status=in.(${from.join(",")})`,
+        {
+          method: "PATCH",
+          prefer: "return=representation",
+          body: JSON.stringify({
+            ...(patch.status !== undefined && {
+              status: patch.status,
+            }),
+            ...(patch.note !== undefined && {
+              note: patch.note,
+            }),
+            ...(patch.captureId !== undefined && {
+              capture_id: patch.captureId,
+            }),
+            updated_at: new Date().toISOString(),
+          }),
+        },
+      );
+
       return rows[0] ? fromRow(rows[0]) : null;
     },
   };
