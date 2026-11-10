@@ -8,6 +8,20 @@ export function TransactionHistory({
 }: {
   transactions: Transaction[];
 }) {
+  const totalTransactions = transactions.length;
+
+  const awaitingApproval = transactions.filter(
+    (t) => t.status === "awaiting_approval"
+  ).length;
+
+  const completed = transactions.filter(
+    (t) => t.status === "completed"
+  ).length;
+
+  const cancelled = transactions.filter(
+    (t) => t.status === "cancelled"
+  ).length;
+
   return (
     <Card
       title="Transaction history"
@@ -16,7 +30,57 @@ export function TransactionHistory({
           {transactions.length} records
         </span>
       }
-    >
+        >
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium text-slate-500">
+            Total transactions
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-900">
+            {totalTransactions}
+          </p>
+          <p className="mt-1 text-[10px] text-slate-400">
+            All recorded activity
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-xs font-medium text-amber-700">
+            Awaiting approval
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-amber-800">
+            {awaitingApproval}
+          </p>
+          <p className="mt-1 text-[10px] text-amber-600">
+            Pending PayPal approval
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+          <p className="text-xs font-medium text-emerald-700">
+            Completed
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-emerald-800">
+            {completed}
+          </p>
+          <p className="mt-1 text-[10px] text-emerald-600">
+            Successfully completed
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-medium text-slate-600">
+            Cancelled
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-slate-800">
+            {cancelled}
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Cancelled transactions
+          </p>
+        </div>
+      </div>
+
       {transactions.length === 0 ? (
         <div className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl text-slate-400 shadow-sm ring-1 ring-slate-200">
@@ -29,7 +93,7 @@ export function TransactionHistory({
 
           <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
             Your purchase and payment activity will appear here once you
-            start shopping with AgentFlow.
+            start shopping with CogniCart.
           </p>
         </div>
       ) : (

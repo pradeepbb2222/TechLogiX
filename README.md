@@ -1,45 +1,181 @@
-# PayPal AgentFlow
 
-AI shopping agent dashboard (Next.js App Router, TypeScript, Tailwind). The agent compares products, you approve, and payment runs through **PayPal Sandbox** (Orders v2). Sandbox only: live mode is rejected by config validation.
+# CogniCart – AI Shopping Assistant
+
+CogniCart is an AI-powered shopping platform that helps users discover products, compare available options, manage spending limits, and make purchases with explicit user approval.
+
+Built using Next.js App Router, TypeScript, Tailwind CSS, Supabase, and PayPal Sandbox.
+
+## Features
+
+- **Product discovery:** Search for products using natural-language shopping requests.
+- **Product comparison:** Review product recommendations, prices, ratings, and relevant highlights.
+- **User authentication:** Secure sign-in using Supabase authentication.
+- **Personal spending limits:** Configure individual spending limits and monitor available budgets.
+- **User-approved payments:** Purchases require explicit approval through PayPal Sandbox.
+- **Transaction history:** View individual purchase records and payment statuses.
+- **Payment verification:** Verify captured orders against server-side transaction records.
+- **Cancellation support:** Handle cancelled PayPal orders.
+- **Spending protection:** Enforce spending limits on the server and prevent concurrent overspending through atomic checkout reservations.
+
+## Technology Stack
+
+
+| Component | Technology |
+|---|---|
+| Frontend | Next.js, React, TypeScript |
+| Styling | Tailwind CSS |
+| Authentication | Supabase Auth |
+| Database | Supabase |
+| AI / LLM | Google Gemini API |
+| AI Integration | Vercel AI SDK |
+| Product Discovery | Channel3 API |
+| Payments | PayPal Orders API v2 (Sandbox) |
+| Development | Node.js, npm |
+
+
 
 ## Setup
 
-Requires Node.js 20+.
+**Prerequisites:** Node.js 20+ and npm.
 
-1. In the PayPal Developer Dashboard open your **AgentFlow** Sandbox app (not the Default Application) and copy its Client ID and Secret.
-2. `Copy-Item .env.example .env.local` and paste them into `.env.local` yourself:
-   ```
-   PAYPAL_CLIENT_ID=...
-   PAYPAL_CLIENT_SECRET=...
-   PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
-   PAYPAL_ENV=sandbox
-   ```
-   Optional: `APP_URL` (default `http://localhost:3000`), `AGENT_SPENDING_LIMIT` (USD server cap, default 1000), `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
-3. `npm install` then `npm run dev` and open http://localhost:3000.
-4. Optional Supabase persistence: run `supabase/schema.sql`. Without Supabase, transactions are stored in `.data/transactions.json` (dev only, git-ignored).
-
-## Payment flow
-
-1. Chat request → agent ranks products from the built-in sample catalog.
-2. **Approve payment** → `POST /api/paypal/orders`. The server prices the order from its own catalog, enforces the spending limit, creates the Sandbox order and returns the PayPal approval URL; the browser is redirected.
-3. Approve with a Sandbox **buyer** account (Dashboard → Testing Tools → Sandbox Accounts).
-4. PayPal returns to `/payment/return`, which calls `POST /api/paypal/capture`. The server atomically claims the order (no double capture), captures it, and verifies order status, capture status, amount and currency against its own record. **Completed is shown only after that verification.**
-5. Cancelling at PayPal returns to `/payment/cancel` → `POST /api/paypal/cancel` → Cancelled.
-
-States: Not Started, Awaiting Approval, Processing, Completed, Failed, Cancelled.
-
-## Tests
+### 1. Clone and install
 
 ```bash
-npm test                              # unit tests: money, limits, capture verification
-npm run build
-node tests/live-sandbox-smoke.mjs     # needs a running server; BASE=http://localhost:3000
+git clone <your-repository-url>
+cd TechLogiX
+npm install
 ```
-The live smoke test creates and then cancels a real Sandbox order. Completing a capture needs a manual buyer login at PayPal.
+
+### 2. Configure environment variables
+
+Create your local environment file:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Configure the following variables in `.env.local`:
+
+| Variable | Purpose |
+|---|---|
+| `PAYPAL_CLIENT_ID` | PayPal Sandbox REST application Client ID |
+| `PAYPAL_CLIENT_SECRET` | PayPal Sandbox REST application Secret |
+| `PAYPAL_BASE_URL` | PayPal Sandbox API endpoint |
+| `PAYPAL_ENV` | Payment environment (`sandbox`) |
+| `APP_URL` | Application origin used for payment redirects |
+| `AGENT_SPENDING_LIMIT` | Server-side spending cap in USD |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL for authentication |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable/anon key |
+| `SUPABASE_URL` | Supabase URL used by the server-side store |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side Supabase service-role key |
+
+Use your own PayPal Sandbox REST application credentials and Supabase project credentials.
+
+**Security:** Never commit `.env.local`, PayPal secrets, or the Supabase service-role key. Never expose server-side secrets through `NEXT_PUBLIC_` variables.
+
+### 3. Configure Supabase
+
+Configure Supabase authentication and database access.
+
+Run the required SQL schema and migrations in your Supabase project.
+
+### 4. Start the application
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### 5. Run tests
+
+```bash
+npm test
+npm run build
+```
+
+
+
+## Payment Flow
+
+1. The user submits a natural-language shopping request.
+2. CogniCart retrieves and presents product recommendations using the configured product discovery service.
+3. The user selects a product and reviews its price and available spending limit.
+4. After explicit user approval, the backend retrieves the product details and validates the expected price against the current product price.
+5. The backend checks authentication, spending limits, pending transactions, and checkout availability before creating a PayPal Sandbox order.
+6. The user is redirected to PayPal to approve the payment using a Sandbox buyer account.
+7. The application receives the payment-return request and calls `POST /api/paypal/capture`.
+8. The backend verifies the order belongs to the authenticated user and atomically claims the capture operation.
+9. The backend checks the spending limit again and captures the PayPal order.
+10. The returned PayPal order and capture details are verified against the stored transaction amount, currency, and order ID.
+11. The transaction is marked completed only after a verified completed capture.
+12. If the user cancels the PayPal approval flow, the cancellation flow updates the transaction accordingly.
+
+## Spending Limit Protection
+
+CogniCart enforces individual spending limits for authenticated users.
+
+- Spending limits are stored per user.
+- The backend validates spending limits independently of frontend calculations.
+- Pending, processing, and completed transactions count toward committed spending.
+- Checkout reservations use an atomic database operation to prevent concurrent purchases from exceeding the user's spending limit.
+- The capture endpoint checks the spending limit again before capturing payment.
+
+## Transaction Statuses
+
+- `not_started`
+- `awaiting_approval`
+- `processing`
+- `completed`
+- `failed`
+- `cancelled`
+
+## Testing
+
+Run the unit tests:
+
+```bash
+npm test
+```
+
+Build the application:
+
+```bash
+npm run build
+```
+
+The live Sandbox smoke test can be run with:
+
+```bash
+node tests/live-sandbox-smoke.mjs
+```
+
+The smoke test requires a running application and valid PayPal Sandbox credentials. Completing a payment requires manual approval through a Sandbox buyer account.
 
 ## Security
 
-- PayPal and Supabase secrets are read only in server code (`src/lib/paypal`, `src/lib/store`) and are never logged or sent to the browser.
-- The browser sends only a product id, an approval flag and an order id. Amounts and statuses are never trusted from it; the client spending limit can only lower the server cap.
-- Out of scope: WhatsApp, voice, payouts, multi-agent negotiation.
-- Note: there is no user auth yet, so transactions and the spending cap are global to this deployment.
+- PayPal credentials and Supabase service-role credentials remain server-side.
+- Payment endpoints require Supabase authentication.
+- Users can access only their own transaction records.
+- Checkout and capture operations validate transaction ownership.
+- Atomic checkout reservations protect against concurrent overspending.
+- Atomic capture claiming prevents concurrent requests from independently capturing the same transaction.
+- PayPal order IDs, capture statuses, amounts, and currencies are verified against trusted server-side records.
+- Uncertain capture outcomes are reconciled with PayPal instead of blindly retrying a capture.
+- Transactions are marked completed only after successful server-side verification.
+- PayPal Sandbox is used for payment testing; live payment mode is not supported by the current configuration.
+
+
+
+## Planned Enhancements
+
+- **Enhanced AI shopping workflows:** Improve multi-step shopping assistance and product-selection reasoning.
+- **Autonomous shopping capabilities:** Develop more advanced AI-assisted shopping workflows while preserving explicit user approval for payments.
+- **Production payment readiness:** Evaluate and implement the additional requirements needed before supporting live PayPal payments.
+
+
+## Project Vision
+
+CogniCart aims to make online shopping more intelligent, transparent, and controlled by combining AI-powered product discovery with secure, user-approved payments.
+
+**Shop with Ease. Pay with Peace.**

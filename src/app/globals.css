@@ -2,8 +2,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f3f6fc;
+  --foreground: #172033;
+
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --surface: #ffffff;
+  --surface-muted: #eef2ff;
+
+  --border: #e2e8f0;
+  --muted: #64748b;
+
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  --sidebar: #111827;
+  --sidebar-foreground: #cbd5e1;
 }
 
 @theme inline {
@@ -28,6 +43,38 @@ body {
 }
 
 ::selection {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #c7d2fe;
+  color: #312e81;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

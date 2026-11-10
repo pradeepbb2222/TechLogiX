@@ -7,14 +7,12 @@ import {
   sweepExpired,
   withCheckoutLock,
 } from "@/lib/checkout/logic";
-import { checkLimit, effectiveLimitCents } from "@/lib/limits";
 import { fromCents, toCents } from "@/lib/money";
 import { createOrder, extractApproveUrl } from "@/lib/paypal/client";
 import {
   getMaxPendingOrders,
   getOrderExpiryMs,
   getPayPalConfig,
-  getServerSpendingLimitCents,
 } from "@/lib/paypal/config";
 import {
   errorReply,
@@ -22,10 +20,8 @@ import {
   reply,
 } from "@/lib/paypal/http";
 import { getStore } from "@/lib/store";
-import {
-  committedCents,
-  type NewTxRecord,
-} from "@/lib/store/types";
+import { type NewTxRecord } from "@/lib/store/types";
+import { getUserSpendingLimitCents } from "@/lib/spending-limits";
 
 export async function POST(request: Request) {
   const blocked = guardMutation(request);
@@ -44,7 +40,6 @@ export async function POST(request: Request) {
     | {
         productId?: unknown;
         expectedPrice?: unknown;
-        spendingLimit?: unknown;
         approved?: unknown;
       }
     | null;
@@ -99,6 +94,8 @@ export async function POST(request: Request) {
 
     phase = "transaction store initialization";
     const store = getStore();
+    phase = "user spending limit retrieval";
+    const limitCents = await getUserSpendingLimitCents(userId);
 
     const outcome = await withCheckoutLock(
       `${userId}:${product.id}`,
@@ -120,31 +117,8 @@ export async function POST(request: Request) {
           );
         }
 
-        phase = "spending limit verification";
+       phase = "checkout amount calculation";
         const amountCents = toCents(product.price);
-
-        const limitCents = effectiveLimitCents(
-          getServerSpendingLimitCents(),
-          body.spendingLimit,
-        );
-
-        const userTransactions = await store.listByUser(userId);
-
-        const limit = checkLimit({
-          limitCents,
-          committedCents: committedCents(userTransactions),
-          amountCents,
-        });
-
-        if (!limit.ok) {
-          return reply(
-            {
-              status: "failed",
-              message: limit.message ?? "Spending limit exceeded.",
-            },
-            422,
-          );
-        }
 
         phase = "PayPal order creation";
         const order = await createOrder(cfg, {
@@ -186,7 +160,17 @@ export async function POST(request: Request) {
           updatedAt: now,
         };
 
-        await store.create(record);
+        const reservation = await store.reserveCheckout(record);
+
+if (!reservation.reserved) {
+  return reply(
+    {
+      status: "failed",
+      message: reservation.message,
+    },
+    422,
+  );
+}
 
         phase = "response preparation";
         return reply(

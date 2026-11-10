@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -35,22 +36,24 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-lg font-bold shadow-lg shadow-blue-500/20">
-    A
-  </div>
 
-  <div className="flex flex-col">
-    <span className="text-xl font-bold tracking-tight">
-      AgentFlow
-    </span>
-    <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-400">
-      Intelligent Shopping. Controlled Payments.
-    </span>
-  </div>
+<div className="mt-8 flex w-fit flex-col items-center gap-2">
+  <Image
+    src="/branding/cognicart-logo.png"
+    alt="CogniCart"
+    width={300}
+    height={120}
+    priority
+    className="h-auto w-[180px] rounded-2xl object-contain shadow-md shadow-black/10"
+  />
+
+  <p className="whitespace-nowrap text-[11px] font-medium tracking-[0.08em] text-blue-100/90">
+    Shop with Ease. Pay with Peace.
+  </p>
 </div>
 
-          <div className="mt-28 max-w-xl">
+
+          <div className="mt-16 max-w-xl">
             <h1 className="text-4xl font-semibold leading-[1.2] tracking-tight xl:text-5xl">
               Shopping smarter.
               <br />
@@ -115,46 +118,88 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-6 text-xs text-slate-400">
-          <span>© 2026 AgentFlow</span>
+          <span>© 2026 CogniCart</span>
           <span>AI-powered E-commerce platform</span>
         </div>
       </section>
 
+
       {/* Right sign-in panel */}
-      <section className="flex min-h-screen flex-col justify-between bg-[#f8fafc] px-6 py-8 sm:px-12 lg:bg-white lg:px-16 xl:px-24">
-        <div className="flex items-center gap-3 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563eb] text-lg font-bold text-white">
+      <section className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-gradient-to-br from-[#f1f4ff] via-[#f8faff] to-[#eef2ff] px-6 py-8 sm:px-12 lg:px-16 xl:px-24">
+
+        {/* Ambient background effects */}
+        <div className="pointer-events-none absolute -right-32 top-10 h-96 w-96 rounded-full bg-indigo-300/25 blur-[100px]" />
+        <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-blue-300/25 blur-[100px]" />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 h-64 w-64 rounded-full bg-violet-200/20 blur-[90px]" />
+
+        {/* Mobile brand */}
+        <div className="relative z-10 flex items-center gap-3 lg:hidden">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-lg font-bold text-white shadow-lg shadow-indigo-500/25">
             A
           </div>
-          <span className="text-lg font-bold tracking-tight text-slate-900">
-            AgentFlow
+          <span className="text-lg font-extrabold tracking-tight text-slate-900">
+            CogniCart
           </span>
         </div>
 
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-16">
-          <div className="mb-10">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-  Welcome to AgentFlow
-</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Sign in to continue to your intelligent shopping workspace.
+        {/* Login content */}
+        <div className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-16">
+
+          <div className="mb-9">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-white/70 px-3 py-1.5 shadow-sm backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">
+                Your intelligent shopping workspace
+              </span>
+            </div>
+
+            <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[40px]">
+              Welcome to
+              <span className="block bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 bg-clip-text text-transparent">
+                CogniCart.
+              </span>
+            </h2>
+
+            <p className="mt-4 max-w-sm text-sm leading-7 text-slate-600">
+              Discover smarter shopping, compare products intelligently,
+              and stay in control of every payment.
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="mb-6">
-              <h3 className="text-base font-semibold text-slate-900">
+          {/* Login card */}
+          <div className="rounded-3xl border border-white/80 bg-white/85 p-7 shadow-[0_20px_70px_-25px_rgba(79,70,229,0.22)] backdrop-blur-xl sm:p-9">
+
+            <div className="mb-7">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-100 text-indigo-600">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  className="h-6 w-6"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 3v2m0 14v2M3 12h2m14 0h2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42m0-12.72-1.42 1.42m-9.88 9.88-1.42 1.42"
+                  />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+              </div>
+
+              <h3 className="text-lg font-bold tracking-tight text-slate-900">
                 Sign in to your account
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Use your Google account to get started.
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Continue securely using your Google account.
               </p>
             </div>
 
             <button
               onClick={handleGoogleLogin}
               disabled={loading}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+              className="group flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50/50 hover:shadow-lg hover:shadow-indigo-100/60 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
@@ -206,71 +251,79 @@ export default function LoginPage() {
                     />
                   </svg>
                   Continue with Google
+                  <span className="ml-auto text-slate-300 transition group-hover:translate-x-1 group-hover:text-indigo-500">
+                    →
+                  </span>
                 </>
               )}
             </button>
 
             {error && (
               <p
-                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600"
+                className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
                 role="alert"
               >
                 {error}
               </p>
             )}
 
-            <div className="my-6 flex items-center gap-3">
+            <div className="my-7 flex items-center gap-3">
               <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
                 Secure authentication
               </span>
               <div className="h-px flex-1 bg-slate-200" />
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 3 5 6v5c0 4.5 2.9 8.2 7 10 4.1-1.8 7-5.5 7-10V6l-7-3Z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m9 12 2 2 4-4"
-                />
-              </svg>
+            {/* Security information */}
+            <div className="flex items-start gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 to-blue-50/70 p-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 3 5 6v5c0 4.5 2.9 8.2 7 10 4.1-1.8 7-5.5 7-10V6l-7-3Z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m9 12 2 2 4-4"
+                  />
+                </svg>
+              </div>
 
               <div>
-                <p className="text-xs font-semibold text-slate-700">
+                <p className="text-xs font-bold text-slate-800">
                   Your account stays protected
                 </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Authentication is securely handled by Supabase. AgentFlow
-                  never asks for your Google password.
+                <p className="mt-1.5 text-xs leading-5 text-slate-600">
+                  Authentication is securely handled by Supabase.
+                  CogniCart never asks for your Google password.
                 </p>
               </div>
             </div>
           </div>
 
-          <p className="mt-6 text-center text-xs leading-5 text-slate-400">
-            By continuing, you agree to use AgentFlow responsibly.
+          <p className="mt-7 text-center text-xs leading-6 text-slate-500">
+            By continuing, you agree to use CogniCart responsibly.
           </p>
         </div>
 
-        <div className="flex items-center justify-center gap-2 border-t border-slate-200 pt-5 text-xs text-slate-400">
-          <span>© 2026 AgentFlow</span>
-          <span>·</span>
+        {/* Footer */}
+        <div className="relative z-10 flex items-center justify-center gap-2 border-t border-indigo-100/80 pt-5 text-xs text-slate-500">
+          <span>© 2026 CogniCart</span>
+          <span className="text-indigo-300">·</span>
           <span>Secure AI-powered shopping</span>
         </div>
       </section>
+
     </main>
   );
 }
