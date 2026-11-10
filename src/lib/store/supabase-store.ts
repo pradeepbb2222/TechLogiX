@@ -71,9 +71,14 @@ export function createSupabaseStore(
       throw new Error(`Supabase request failed (${res.status}).`);
     }
 
-    return res.status === 204
-      ? []
-      : ((await res.json()) as Row[]);
+    if (
+  res.status === 204 ||
+  init.prefer?.split(",").some((value) => value.trim() === "return=minimal")
+) {
+  return [];
+}
+
+return (await res.json()) as Row[];
   }
 
   return {
