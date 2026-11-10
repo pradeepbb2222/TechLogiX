@@ -13,6 +13,7 @@ interface Result extends Partial<PaymentResponse> {
   transaction?: Transaction;
   /** True when the server could not give us a payment status (unknown order, expired session, network). */
   unavailable?: boolean;
+  trackingError?: string;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -55,12 +56,33 @@ export function PaymentResult({ mode }: { mode: Mode }) {
             continue;
           }
           if (data.status === "completed") {
-            try {
-              sessionStorage.removeItem(CHECKOUT_CONTEXT_KEY); // nothing left to retry
-            } catch {
-              // ignore
-            }
-          }
+  try {
+    sessionStorage.removeItem(CHECKOUT_CONTEXT_KEY);
+  } catch {
+    // ignore
+  }
+
+  // Create the delivery tracking record after payment confirmation.
+  try {
+    const trackingResponse = await fetch("/api/order-tracking", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ orderId }),
+    });
+
+    if (!trackingResponse.ok) {
+      const trackingData = await trackingResponse.json().catch(() => null);
+
+      data.trackingError =
+        trackingData?.error ?? "Payment succeeded, but tracking could not be created.";
+    }
+  } catch {
+    data.trackingError =
+      "Payment succeeded, but tracking could not be created. Please try again later.";
+  }
+}
           setResult(res.ok || res.status === 202 ? data : { unavailable: true, message: data.message });
           break;
         } catch {
@@ -90,6 +112,11 @@ export function PaymentResult({ mode }: { mode: Mode }) {
           <p className="mt-3 text-sm text-slate-600">
             {tx.productName} · <span className="font-semibold">{usd(tx.amount)}</span> {tx.currency}
           </p>
+        )}
+        {result.trackingError && !loading && (
+        <p className="mt-3 text-sm text-amber-700" role="status">
+        {result.trackingError}
+        </p>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
           {canRetry && (

@@ -12,6 +12,7 @@ import { ProductComparison } from "@/components/ProductComparison";
 import { SpendingLimit } from "@/components/SpendingLimit";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { useAgentFlow } from "@/hooks/useAgentFlow";
+import { OrderTrackingSection } from "@/features/order-tracking/components/OrderTrackingSection";
 
 interface Props {
   userEmail: string;
@@ -96,6 +97,7 @@ export default function AgentFlowDashboard({ userEmail }: Props) {
           />
 
           <TransactionHistory transactions={a.transactions} />
+          <OrderTrackingSection />
         </div>
 
         <div className="space-y-6">

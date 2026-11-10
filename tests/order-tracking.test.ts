@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { TxRecord } from "../src/lib/store/types.ts";
-import { createTrackedOrder } from "../src/features/order-tracking/services/orderService.ts";
-import { advanceOrderStatus } from "../src/features/order-tracking/services/orderProgress.ts";
-import { getOrder } from "../src/features/order-tracking/services/orderStorage.ts";
+import { createTrackedOrder } from "../src/features/order-tracking/services/orderService";
+import { advanceOrderStatus } from "../src/features/order-tracking/services/orderProgress";
+import { getOrder } from "../src/features/order-tracking/services/orderStorage";
 
 function createTransaction(
   orderId: string,
@@ -14,6 +14,7 @@ function createTransaction(
   const now = new Date().toISOString();
 
   return {
+    userId: "test-user",
     orderId,
     productId: "PROD001",
     productName: "Wireless Headphones",
