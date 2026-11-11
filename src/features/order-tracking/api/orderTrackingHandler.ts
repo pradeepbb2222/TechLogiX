@@ -1,4 +1,7 @@
 
+import type { TxRecord } from "../../../lib/store/types";
+import type { TrackedOrder } from "../types/order.types";
+
 interface TrackingHandlerDependencies {
   getAuthenticatedUser: () => Promise<{ id: string } | null>;
   createTrackedOrder: (
@@ -74,6 +77,66 @@ export function createOrderTrackingHandler(
 
       return Response.json(
         { error: "Unable to create order tracking." },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+interface MyOrdersHandlerDependencies {
+  getAuthenticatedUser: () => Promise<{ id: string } | null>;
+  getTrackedOrders: (userId: string) => Promise<TrackedOrder[]>;
+  listTransactions: (userId: string) => Promise<TxRecord[]>;
+  createTrackedOrder: (orderId: string, userId: string) => Promise<unknown>;
+}
+
+export function createMyOrdersHandler(
+  dependencies: MyOrdersHandlerDependencies,
+) {
+  return async (): Promise<Response> => {
+    try {
+      const user = await dependencies.getAuthenticatedUser();
+
+      if (!user) {
+        return Response.json(
+          { error: "Unauthorized. Please log in." },
+          { status: 401 },
+        );
+      }
+
+      let orders = await dependencies.getTrackedOrders(user.id);
+      const trackedOrderIds = new Set(
+        orders.map((order) => order.orderId),
+      );
+      const transactions = await dependencies.listTransactions(user.id);
+
+      for (const transaction of transactions) {
+        if (
+          transaction.status === "completed" &&
+          !trackedOrderIds.has(transaction.orderId)
+        ) {
+          try {
+            await dependencies.createTrackedOrder(
+              transaction.orderId,
+              user.id,
+            );
+          } catch (error) {
+            console.error(
+              `Tracking recovery failed for order ${transaction.orderId}:`,
+              error,
+            );
+          }
+        }
+      }
+
+      orders = await dependencies.getTrackedOrders(user.id);
+
+      return Response.json({ orders }, { status: 200 });
+    } catch (error) {
+      console.error("My tracked orders GET error:", error);
+
+      return Response.json(
+        { error: "Unable to fetch your tracked orders." },
         { status: 500 },
       );
     }

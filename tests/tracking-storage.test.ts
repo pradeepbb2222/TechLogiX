@@ -1,7 +1,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createTrackedOrder } from "../src/features/order-tracking/services/trackingStorage";
+import {
+  createTrackedOrder,
+  getTrackedOrders,
+} from "../src/features/order-tracking/services/trackingStorage";
 
 test("creates a tracked order using Supabase and its atomic RPC", async () => {
   const originalFetch = globalThis.fetch;
@@ -477,6 +480,82 @@ test("throws an error when tracking events cannot be retrieved", async () => {
         message: "Tracking database request failed (500).",
       },
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+
+    if (originalUrl === undefined) {
+      delete process.env.SUPABASE_URL;
+    } else {
+      process.env.SUPABASE_URL = originalUrl;
+    }
+
+    if (originalKey === undefined) {
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    } else {
+      process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+    }
+  }
+});
+
+test("lists only the requested user's tracked orders and their events", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+
+  const requestUrls: string[] = [];
+  const trackedOrder = {
+    order_id: "ORD-TEST-006",
+    user_id: "user-test-006",
+    tracking_number: "TLX-TEST-006",
+    product_id: "PROD001",
+    product_name: "Wireless Headphones",
+    merchant: "Tech Store",
+    amount_cents: 7999,
+    currency: "USD",
+    status: "PROCESSING",
+    estimated_delivery: "2026-01-06T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:05:00.000Z",
+  };
+  const trackingEvent = {
+    id: "EVENT-006",
+    order_id: "ORD-TEST-006",
+    status: "PROCESSING",
+    title: "Order processing started",
+    description: "Your order is being prepared.",
+    timestamp: "2026-01-01T00:05:00.000Z",
+  };
+
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    requestUrls.push(url);
+
+    if (url.includes("/tracked_orders?")) {
+      return new Response(JSON.stringify([trackedOrder]), { status: 200 });
+    }
+
+    if (url.includes("/tracking_events?")) {
+      return new Response(JSON.stringify([trackingEvent]), { status: 200 });
+    }
+
+    return new Response("Unexpected request", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const orders = await getTrackedOrders("user-test-006");
+
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].orderId, "ORD-TEST-006");
+    assert.equal(orders[0].status, "PROCESSING");
+    assert.equal(orders[0].events[0].status, "PROCESSING");
+    assert.ok(
+      requestUrls[0].includes("user_id=eq.user-test-006"),
+      "the tracked-orders query should be filtered by the requested user",
+    );
+    assert.ok(requestUrls[1].includes("order_id=eq.ORD-TEST-006"));
   } finally {
     globalThis.fetch = originalFetch;
 
