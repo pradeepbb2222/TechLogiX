@@ -11,6 +11,13 @@ const SUPPORTED_MIME_TYPES = new Set([
 ]);
 
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // 10 MB
+export const TRANSCRIPTION_TIMEOUT_MS = 30_000;
+
+export function createTranscriptionAbortSignal(
+  timeoutMs = TRANSCRIPTION_TIMEOUT_MS,
+): AbortSignal {
+  return AbortSignal.timeout(timeoutMs);
+}
 
 export function isSupportedAudioMimeType(mimeType: string): boolean {
   return SUPPORTED_MIME_TYPES.has(mimeType);
@@ -24,10 +31,7 @@ export async function transcribeAudio(
     throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is not configured.");
   }
 
-  // Package audio as a typed Data URL so the @ai-sdk/google adapter and the
-  // Gemini Interactions API both receive the exact MIME type rather than
-  // relying on binary-header sniffing (which falls back to audio/wav for
-  // unknown signatures such as the M4A/MP4 container).
+  // Preserve the exact MIME type for the Gemini transcription model.
   const normalizedMimeType = mimeType.split(";")[0].trim();
 
   const audioInput = new URL(
@@ -40,6 +44,7 @@ export async function transcribeAudio(
     model,
     audio: audioInput,
     maxRetries: 0,
+    abortSignal: createTranscriptionAbortSignal(),
   });
 
   return { text: result.text ? result.text.trim() : "" };

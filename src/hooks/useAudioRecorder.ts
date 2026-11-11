@@ -50,6 +50,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const isMountedRef = useRef(true);
   /** M2: Prevents concurrent getUserMedia() calls from opening multiple streams. */
   const isAcquiringRef = useRef(false);
+  const transcriptionAbortControllerRef = useRef<AbortController | null>(null);
 
   /** Stop all microphone tracks and release the stream. */
   const releaseStream = useCallback(() => {
@@ -66,6 +67,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      transcriptionAbortControllerRef.current?.abort();
+      transcriptionAbortControllerRef.current = null;
       if (
         mediaRecorderRef.current &&
         mediaRecorderRef.current.state !== "inactive"
@@ -182,6 +185,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
         // Send to the transcription API.
         setIsTranscribing(true);
+
+        const abortController = new AbortController();
+        transcriptionAbortControllerRef.current = abortController;
+
         try {
           const form = new FormData();
           // Use the base MIME type (without codec params) for the filename
@@ -192,7 +199,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           const response = await fetch("/api/transcribe", {
             method: "POST",
             body: form,
+            signal: abortController.signal,
           });
+
           if (!isMountedRef.current) {
             resolve("");
             return;
@@ -200,24 +209,29 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
           if (!response.ok) {
             const body = await response.json().catch(() => ({}));
+
             if (!isMountedRef.current) {
               resolve("");
               return;
             }
+
             const message =
               typeof body?.error === "string"
                 ? body.error
                 : `Transcription failed (HTTP ${response.status}).`;
+
             setErrorMessage(message);
             resolve("");
             return;
           }
 
           const data = await response.json();
+
           if (!isMountedRef.current) {
             resolve("");
             return;
           }
+
           const transcript: string =
             typeof data?.text === "string" ? data.text : "";
 
@@ -234,10 +248,18 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
               "Network error while transcribing. Please check your connection and try again.",
             );
           }
+
           resolve("");
         } finally {
-          if (isMountedRef.current) setIsTranscribing(false);
+          if (transcriptionAbortControllerRef.current === abortController) {
+            transcriptionAbortControllerRef.current = null;
+          }
+
+          if (isMountedRef.current) {
+            setIsTranscribing(false);
+          }
         }
+
       };
 
       recorder.stop();

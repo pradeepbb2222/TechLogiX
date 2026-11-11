@@ -1,14 +1,35 @@
 import { NextResponse } from "next/server";
+import { APICallError } from "ai";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import {
   transcribeAudio,
   isSupportedAudioMimeType,
   MAX_AUDIO_BYTES,
 } from "@/lib/transcribe";
+import { checkTranscriptionRateLimit } from "@/lib/transcribe-rate-limit";
+import { readLimitedFormData } from "@/lib/limited-form-data";
+import { isAudioSignatureMatchingMimeType } from "@/lib/audio-signature";
 
-export async function POST(request: Request) {
+type TranscribeDependencies = {
+  authenticate: () => Promise<{ id: string } | null>;
+  checkRateLimit: (userId: string) => Promise<{
+    success: boolean;
+    remaining: number;
+    reset: number;
+  }>;
+  transcribe: (
+    buffer: Buffer,
+    mimeType: string,
+  ) => Promise<{ text: string }>;
+};
+
+export async function handleTranscribeRequest(
+  request: Request,
+  dependencies: TranscribeDependencies,
+) {
   try {
-    const user = await getAuthenticatedUser();
+    const user = await dependencies.authenticate();
+
     if (!user) {
       return NextResponse.json(
         { error: "Authentication required." },
@@ -16,17 +37,50 @@ export async function POST(request: Request) {
       );
     }
 
-    let formData: FormData;
+    let rateLimit;
+
     try {
-      formData = await request.formData();
-    } catch {
+      rateLimit = await dependencies.checkRateLimit(user.id);
+    } catch (error) {
+      console.error("Transcription rate-limit check failed:", error);
+
       return NextResponse.json(
-        { error: "Invalid request body." },
-        { status: 400 },
+        {
+          error:
+            "Transcription service temporarily unavailable. Please try again.",
+        },
+        { status: 503 },
       );
     }
 
-    const file = formData.get("audio");
+    if (!rateLimit.success) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((rateLimit.reset - Date.now()) / 1000),
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Too many transcription requests. Please try again shortly.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfter) },
+        },
+      );
+    }
+
+    const bodyResult = await readLimitedFormData(request);
+
+    if (!bodyResult.ok) {
+      return NextResponse.json(
+        { error: bodyResult.error },
+        { status: bodyResult.status },
+      );
+    }
+
+    const file = bodyResult.formData.get("audio");
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -52,14 +106,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize MIME type: strip codec parameters (e.g. "audio/webm;codecs=opus"
-    // → "audio/webm") before validating against the accepted-formats whitelist.
-    const mimeType = (file.type || "audio/webm").split(";")[0].trim();
+    const mimeType = file.type
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
 
-    if (!isSupportedAudioMimeType(mimeType)) {
+    if (!mimeType || !isSupportedAudioMimeType(mimeType)) {
       return NextResponse.json(
         {
-          error: `Unsupported audio format: ${mimeType}. Accepted: audio/mp4, audio/webm, audio/wav, audio/mpeg, audio/ogg, audio/aac.`,
+          error: `Unsupported audio format: ${mimeType || "unknown"}. Accepted: audio/mp4, audio/webm, audio/wav, audio/mpeg, audio/ogg, audio/aac.`,
         },
         { status: 415 },
       );
@@ -68,14 +123,62 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const { text } = await transcribeAudio(buffer, mimeType);
+    if (!isAudioSignatureMatchingMimeType(buffer, mimeType)) {
+      return NextResponse.json(
+        {
+          error:
+            "Audio content does not match the declared file format.",
+        },
+        { status: 415 },
+      );
+    }
+
+    const { text } = await dependencies.transcribe(buffer, mimeType);
 
     return NextResponse.json({ text });
   } catch (error) {
+    if (APICallError.isInstance(error) && error.statusCode === 429) {
+      const retryAfter = Object.entries(error.responseHeaders ?? {})
+        .find(([name]) => name.toLowerCase() === "retry-after")?.[1]
+        ?.trim();
+
+      const headers: Record<string, string> = {};
+
+      if (
+        retryAfter &&
+        /^\d+$/.test(retryAfter) &&
+        Number.isSafeInteger(Number(retryAfter))
+      ) {
+        headers["Retry-After"] = retryAfter;
+      }
+
+      console.warn("Transcription provider rate limit reached.");
+
+      return NextResponse.json(
+        {
+          error:
+            "The transcription service is temporarily rate-limited. Please try again shortly.",
+        },
+        {
+          status: 429,
+          headers,
+        },
+      );
+    }
+
     console.error("Transcribe API error:", error);
+
     return NextResponse.json(
       { error: "Unable to transcribe audio. Please try again." },
       { status: 500 },
     );
   }
+}
+
+export async function POST(request: Request) {
+  return handleTranscribeRequest(request, {
+    authenticate: getAuthenticatedUser,
+    checkRateLimit: checkTranscriptionRateLimit,
+    transcribe: transcribeAudio,
+  });
 }
