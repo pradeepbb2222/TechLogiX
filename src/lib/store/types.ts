@@ -37,6 +37,14 @@ export class DuplicateOrderError extends Error {
 }
 
 export interface TxStore {
+    reserveCheckout(
+    record: NewTxRecord,
+  ): Promise<{
+    reserved: boolean;
+    message: string;
+    currentLimitCents: number;
+    committedCents: number;
+  }>;
   kind: "supabase" | "file";
 
   create(record: NewTxRecord): Promise<void>;
@@ -78,7 +86,7 @@ export function toTransaction(r: TxRecord): Transaction {
   };
 }
 
-/** Cents already spent or in flight (completed + processing), excluding an optional order. */
+/** Cents spent or reserved (awaiting approval + processing + completed), excluding an optional order. */
 export function committedCents(
   records: TxRecord[],
   excludeOrderId?: string,
@@ -87,7 +95,11 @@ export function committedCents(
     .filter(
       (r) =>
         r.orderId !== excludeOrderId &&
-        (r.status === "completed" || r.status === "processing"),
+        (
+          r.status === "awaiting_approval" ||
+          r.status === "processing" ||
+          r.status === "completed"
+        ),
     )
     .reduce((sum, r) => sum + r.amountCents, 0);
 }

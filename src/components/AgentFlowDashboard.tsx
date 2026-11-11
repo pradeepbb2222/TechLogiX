@@ -1,124 +1,61 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-
-import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { ChatPanel } from "@/components/ChatPanel";
-import { PaymentPanel } from "@/components/PaymentPanel";
-import { ProductComparison } from "@/components/ProductComparison";
-import { SpendingLimit } from "@/components/SpendingLimit";
-import { TransactionHistory } from "@/components/TransactionHistory";
-import { useAgentFlow } from "@/hooks/useAgentFlow";
+import { useAgentFlowContext } from "@/providers/AgentFlowProvider";
 
-interface Props {
-  userEmail: string;
-}
-
-export default function AgentFlowDashboard({ userEmail }: Props) {
-  const a = useAgentFlow();
+export default function AgentFlowDashboard() {
+  const { flow, userEmail } = useAgentFlowContext();
   const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState("");
+  const previousSearching = useRef(false);
 
-  async function handleLogout() {
-    setLoggingOut(true);
-    setLogoutError("");
-
-    const supabase = createClient();
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setLogoutError(error.message);
-      setLoggingOut(false);
-      return;
+  useEffect(() => {
+    if (
+      previousSearching.current &&
+      !flow.isSearching &&
+      flow.products.length > 0
+    ) {
+      router.push("/results");
     }
 
-    router.replace("/login");
-    router.refresh();
-  }
+    previousSearching.current = flow.isSearching;
+  }, [flow.isSearching, flow.products.length, router]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">
-              PayPal AgentFlow
-            </h1>
-            <p className="text-sm text-slate-500">
-              Autonomous shopping agent · you approve every payment
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Signed in as: {userEmail}
-            </p>
-          </div>
+    <div className="space-y-8">
+      <section className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50/80 p-6 shadow-sm sm:p-8">
+  <div className="relative z-10">
+    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5">
+      <span className="h-2 w-2 rounded-full bg-indigo-500" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">
+        Your intelligent shopping workspace
+      </span>
+    </div>
 
-          <div className="flex items-center gap-3">
-            <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-300 sm:inline">
-              PayPal Sandbox
-            </span>
+    <h2 className="text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
+      Shop smarter with{" "}
+      <span className="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent">
+        CogniCart AI
+      </span>
+    </h2>
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              {loggingOut ? "Signing out..." : "Logout"}
-            </button>
-          </div>
-        </div>
+    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+      Tell us what you need. Discover real products, compare suitable options
+      and stay in control of every purchase with user-approved payments.
+    </p>
+  </div>
 
-        {logoutError && (
-          <p className="mx-auto max-w-7xl px-4 pb-3 text-sm text-red-600 sm:px-6">
-            Logout failed: {logoutError}
-          </p>
-        )}
-      </header>
+  <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-indigo-100/50 blur-3xl" />
+</section>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <ChatPanel
-            messages={a.messages}
-            busy={a.isSearching}
-            onSend={a.sendMessage}
-          />
-
-          <ProductComparison
-            products={a.products}
-            recommendedId={a.recommendedId}
-            selectedId={a.selectedId}
-            spendingLimit={a.spendingLimit}
-            onSelect={a.selectProduct}
-          />
-
-          <TransactionHistory transactions={a.transactions} />
-        </div>
-
-        <div className="space-y-6">
-          <SpendingLimit
-            limit={a.spendingLimit}
-            spent={a.spent}
-            remaining={a.remaining}
-            onChange={a.setSpendingLimit}
-          />
-
-          <PaymentPanel
-            status={a.paymentStatus}
-            selected={a.selected}
-            message={a.paymentMessage}
-            spendingLimit={a.spendingLimit}
-            onApprove={a.approve}
-            onCancel={a.cancel}
-            onRetry={a.retry}
-          />
-
-          <ActivityTimeline events={a.events} />
-        </div>
-      </main>
+      <ChatPanel
+  messages={flow.messages}
+  busy={flow.isSearching}
+  onSend={flow.sendMessage}
+  userInitial={userEmail?.charAt(0).toUpperCase() || "U"}
+/>
     </div>
   );
 }

@@ -43,7 +43,7 @@ const productRankingSchema = z.object({
 export type ProductRanking = z.infer<typeof productRankingSchema>;
 
 function getGeminiModel() {
-  return google("gemini-3.8-flash");
+  return google("gemini-3.6-flash");
 }
 
 export async function understandShoppingRequest(
@@ -54,7 +54,7 @@ export async function understandShoppingRequest(
   }
 
   const { output } = await generateText({
-    timeout: { totalMs: 90_000 },
+    timeout: { totalMs: 15_000 },
     maxRetries: 0,
     model: getGeminiModel(),
     output: Output.object({
@@ -119,8 +119,8 @@ export async function rankProducts(
   }));
 
   const { output } = await generateText({
-    timeout: { totalMs: 90_000 },
-    maxRetries: 2,
+    timeout: { totalMs: 15_000 },
+    maxRetries: 0,
     model: getGeminiModel(),
     output: Output.object({
       schema: productRankingSchema,

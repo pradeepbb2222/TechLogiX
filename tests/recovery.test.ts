@@ -75,6 +75,15 @@ function memoryStore(
     rec,
     kind: "file",
 
+    async reserveCheckout(record: NewTxRecord) {
+      return {
+        reserved: false,
+        message: "Not needed in recovery tests.",
+        currentLimitCents: record.limitCents,
+        committedCents: 0,
+      };
+    },
+
     async create(_record: NewTxRecord) {
       throw new Error("Not needed in recovery tests");
     },
