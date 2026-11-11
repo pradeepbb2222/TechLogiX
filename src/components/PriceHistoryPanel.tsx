@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,9 +29,14 @@ interface PriceHistoryResponse {
 
 type LoadState =
   | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "loaded"; data: PriceHistoryResponse; fetchedAt: number };
+  | { status: "loading"; productId: string }
+  | { status: "error"; productId: string; message: string }
+  | {
+      status: "loaded";
+      productId: string;
+      data: PriceHistoryResponse;
+      referenceTime: number;
+    };
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -47,6 +53,48 @@ function formatDate(value: string) {
   });
 }
 
+function isValidStatistics(
+  value: unknown,
+): value is PriceHistoryResponse["statistics"] {
+  if (value === null) {
+    return true;
+  }
+
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const statistics = value as Record<string, unknown>;
+
+  return (
+    Number.isFinite(statistics.mean) &&
+    Number.isFinite(statistics.std_dev) &&
+    Number.isFinite(statistics.min_price) &&
+    Number.isFinite(statistics.max_price) &&
+    Number.isFinite(statistics.current_price) &&
+    typeof statistics.currency === "string" &&
+    ["low", "typical", "high"].includes(
+      String(statistics.current_status),
+    )
+  );
+}
+
+function isValidPriceHistoryResponse(
+  value: unknown,
+): value is PriceHistoryResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const result = value as Record<string, unknown>;
+
+  return (
+    typeof result.canonicalProductId === "string" &&
+    Array.isArray(result.history) &&
+    isValidStatistics(result.statistics)
+  );
+}
+
 function PriceChart({
   points,
   currency,
@@ -60,6 +108,18 @@ function PriceChart({
     const padding = 24;
 
     const prices = points.map((point) => point.price);
+
+    if (prices.length === 0) {
+      return {
+        width,
+        height,
+        coordinates: [] as { x: number; y: number }[],
+        line: "",
+        min: 0,
+        max: 0,
+      };
+    }
+
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const range = max - min || max * 0.1 || 1;
@@ -88,15 +148,28 @@ function PriceChart({
     };
   }, [points]);
 
-  const firstDate = points[0]?.timestamp;
-  const lastDate = points[points.length - 1]?.timestamp;
+  if (points.length === 0) {
+    return (
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+        <p className="text-sm font-medium text-slate-700">
+          No chart data available
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          No valid historical observations are available to plot.
+        </p>
+      </div>
+    );
+  }
+
+  const firstDate = points[0].timestamp;
+  const lastDate = points[points.length - 1].timestamp;
 
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{firstDate ? formatDate(firstDate) : ""}</span>
+        <span>{formatDate(firstDate)}</span>
         <span>Historical observations</span>
-        <span>{lastDate ? formatDate(lastDate) : ""}</span>
+        <span>{formatDate(lastDate)}</span>
       </div>
 
       <svg
@@ -106,8 +179,7 @@ function PriceChart({
         className="mt-2 h-44 w-full overflow-visible"
       >
         {[0, 1, 2, 3].map((line) => {
-          const y =
-            24 + (line / 3) * (chart.height - 48);
+          const y = 24 + (line / 3) * (chart.height - 48);
 
           return (
             <line
@@ -166,6 +238,7 @@ export function PriceHistoryPanel({ selected }: Props) {
   const selectedPrice = selected?.price;
   const selectedCurrency = selected?.currency;
 
+  // Fetch historical data only when the product ID changes.
   useEffect(() => {
     if (!selectedId) {
       return;
@@ -175,7 +248,10 @@ export function PriceHistoryPanel({ selected }: Props) {
     const controller = new AbortController();
 
     async function loadHistory() {
-      setState({ status: "loading" });
+      setState({
+        status: "loading",
+        productId,
+      });
 
       try {
         const params = new URLSearchParams({
@@ -191,49 +267,42 @@ export function PriceHistoryPanel({ selected }: Props) {
           },
         );
 
-        const result = await response.json();
+        const result: unknown = await response.json();
 
         if (!response.ok) {
-          throw new Error(
+          const errorMessage =
+            typeof result === "object" &&
+            result !== null &&
+            "error" in result &&
             typeof result.error === "string"
               ? result.error
-              : "Unable to retrieve price history.",
-          );
+              : "Unable to retrieve price history.";
+
+          throw new Error(errorMessage);
         }
 
-        const statistics = result.statistics;
-
-        const validStatistics =
-          statistics === null ||
-          (typeof statistics === "object" &&
-            Number.isFinite(statistics.mean) &&
-            Number.isFinite(statistics.std_dev) &&
-            Number.isFinite(statistics.min_price) &&
-            Number.isFinite(statistics.max_price) &&
-            Number.isFinite(statistics.current_price) &&
-            typeof statistics.currency === "string" &&
-            ["low", "typical", "high"].includes(
-              statistics.current_status,
-            ));
-
-        if (
-          !Array.isArray(result.history) ||
-          typeof result.canonicalProductId !== "string" ||
-          !validStatistics
-        ) {
+        if (!isValidPriceHistoryResponse(result)) {
           throw new Error("The price history response was invalid.");
+        }
+
+        if (controller.signal.aborted) {
+          return;
         }
 
         setState({
           status: "loaded",
-          data: result as PriceHistoryResponse,
-          fetchedAt: Date.now(),
+          productId,
+          data: result,
+          referenceTime: Date.now(),
         });
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          return;
+        }
 
         setState({
           status: "error",
+          productId,
           message:
             error instanceof Error
               ? error.message
@@ -245,45 +314,58 @@ export function PriceHistoryPanel({ selected }: Props) {
     void loadHistory();
 
     return () => controller.abort();
-  }, [selectedId, selectedPrice, selectedCurrency]);
+  }, [selectedId]);
 
+  // Recalculate analysis when the selected price changes.
+  // This does not trigger another historical API request.
   const analysis = useMemo(() => {
     if (
       state.status !== "loaded" ||
-      !selected
+      !selectedId ||
+      state.productId !== selectedId ||
+      selectedPrice === undefined ||
+      selectedCurrency === undefined
     ) {
       return null;
     }
 
     return analyzePriceHistory(
       state.data.history,
-      selected.price,
-      selected.currency,
+      selectedPrice,
+      selectedCurrency,
+      new Date(state.referenceTime),
     );
-  }, [state, selected]);
+  }, [state, selectedId, selectedPrice, selectedCurrency]);
 
+  // Filter chart points using the same reference time as the analysis.
   const chartPoints = useMemo(() => {
-    if (state.status !== "loaded" || !selected) {
+    if (
+      state.status !== "loaded" ||
+      !selectedId ||
+      state.productId !== selectedId ||
+      selectedCurrency === undefined
+    ) {
       return [];
     }
 
-    const now = state.fetchedAt;
+    const referenceTime = state.referenceTime;
 
     return state.data.history
       .filter(
         (point) =>
           Number.isFinite(point.price) &&
           point.price > 0 &&
+          typeof point.currency === "string" &&
           point.currency.toUpperCase() ===
-            selected.currency.toUpperCase() &&
+            selectedCurrency.toUpperCase() &&
           Number.isFinite(Date.parse(point.timestamp)) &&
-          Date.parse(point.timestamp) <= now,
+          Date.parse(point.timestamp) <= referenceTime,
       )
       .sort(
         (a, b) =>
           Date.parse(a.timestamp) - Date.parse(b.timestamp),
       );
-  }, [state, selected]);
+  }, [state, selectedId, selectedCurrency]);
 
   if (!selected) {
     return (
@@ -297,6 +379,14 @@ export function PriceHistoryPanel({ selected }: Props) {
       </section>
     );
   }
+
+  // A state belonging to another product must never be displayed.
+  const isCurrentProductState =
+    state.status !== "idle" &&
+    state.productId === selected.id;
+
+  const isLoading =
+    !isCurrentProductState || state.status === "loading";
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -327,7 +417,7 @@ export function PriceHistoryPanel({ selected }: Props) {
         </p>
       </div>
 
-      {state.status === "loading" && (
+      {isLoading && (
         <div className="py-10 text-center">
           <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
           <p className="mt-3 text-sm text-slate-500">
@@ -336,153 +426,166 @@ export function PriceHistoryPanel({ selected }: Props) {
         </div>
       )}
 
-      {state.status === "error" && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="font-medium text-amber-900">
-            Price history unavailable
-          </p>
-          <p className="mt-1 text-sm text-amber-800">
-            {state.message}
-          </p>
-          <p className="mt-2 text-xs text-amber-700">
-            No historical prices have been fabricated or substituted.
-          </p>
-        </div>
-      )}
-
-      {state.status === "loaded" && !analysis && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="font-medium text-amber-900">
-            No usable historical observations found
-          </p>
-          <p className="mt-1 text-sm text-amber-800">
-            Channel3 did not return valid price observations
-            in the selected product&apos;s currency.
-          </p>
-        </div>
-      )}
-
-      {state.status === "loaded" && analysis && (
-        <>
-          <PriceChart
-            points={chartPoints}
-            currency={selected.currency}
-          />
-
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Metric
-              label="Current shopping offer"
-              value={formatPrice(selected.price, selected.currency)}
-            />
-            <Metric
-              label="Channel3 tracked current price"
-              value={
-                state.data.statistics &&
-                state.data.statistics.currency.toUpperCase() ===
-                  selected.currency.toUpperCase()
-                  ? formatPrice(
-                      state.data.statistics.current_price,
-                      state.data.statistics.currency,
-                    )
-                  : "Unavailable"
-              }
-            />
-            <Metric
-              label="Channel3 price status"
-              value={
-                state.data.statistics &&
-                state.data.statistics.currency.toUpperCase() ===
-                  selected.currency.toUpperCase()
-                  ? state.data.statistics.current_status.toUpperCase()
-                  : "Unavailable"
-              }
-            />
-            <Metric
-              label="Historical average"
-              value={formatPrice(
-                analysis.averagePrice,
-                selected.currency,
-              )}
-            />
-            <Metric
-              label="Historical minimum"
-              value={formatPrice(
-                analysis.minPrice,
-                selected.currency,
-              )}
-            />
-            <Metric
-              label="Historical maximum"
-              value={formatPrice(
-                analysis.maxPrice,
-                selected.currency,
-              )}
-            />
-            <Metric
-              label="30-day observed low"
-              value={
-                analysis.lowestPrice30Days === null
-                  ? "Insufficient data"
-                  : formatPrice(
-                      analysis.lowestPrice30Days,
-                      selected.currency,
-                    )
-              }
-            />
-            <Metric
-              label="Price volatility"
-              value={`${analysis.volatilityPercent.toFixed(1)}%`}
-            />
-            <Metric
-              label="Historical observations"
-              value={String(analysis.sampleCount)}
-            />
-          </div>
-
-          <div className="mt-4 rounded-lg border border-slate-200 p-4">
-            <p className="text-sm font-semibold text-slate-900">
-              Shopping offer vs historical prices
+      {state.status === "error" &&
+        state.productId === selected.id && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="font-medium text-amber-900">
+              Price history unavailable
             </p>
-
-            <p className="mt-2 text-sm text-slate-700">
-              {analysis.priceAssessment === "below_average"
-                ? "The selected shopping offer is more than 5% below the historical average."
-                : analysis.priceAssessment === "above_average"
-                  ? "The selected shopping offer is more than 5% above the historical average."
-                  : "The selected shopping offer is within 5% of the historical average."}
+            <p className="mt-1 text-sm text-amber-800">
+              {state.message}
             </p>
-
-            <p className="mt-1 text-sm text-slate-600">
-              {Math.abs(analysis.currentVsAveragePercent).toFixed(1)}%
-              {" "}
-              {analysis.currentVsAveragePercent > 0
-                ? "above"
-                : analysis.currentVsAveragePercent < 0
-                  ? "below"
-                  : "equal to"}{" "}
-              the historical average.
-            </p>
-
-            <p className="mt-3 text-sm text-slate-700">
-              {analysis.recentLowAssessment === "insufficient_data"
-                ? "There are not enough recent observations to assess the 30-day low."
-                : analysis.recentLowAssessment === "at_or_below_low"
-                  ? "The selected shopping offer is at or below the lowest observed price in the last 30 days."
-                  : analysis.recentLowAssessment === "near_low"
-                    ? "The selected shopping offer is within 5% of the lowest observed price in the last 30 days."
-                    : "The selected shopping offer is more than 5% above the lowest observed price in the last 30 days."}
+            <p className="mt-2 text-xs text-amber-700">
+              No historical prices have been fabricated or substituted.
             </p>
           </div>
+        )}
 
-          <p className="mt-3 text-xs text-slate-500">
-            Analysis uses actual Channel3 observations returned
-            for this product. The 30-day low reflects available
-            observations, not estimated daily prices. Volatility
-            is calculated as population standard deviation divided
-            by the historical average.
-          </p>
-        </>
-      )}
+      {state.status === "loaded" &&
+        state.productId === selected.id &&
+        !analysis && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="font-medium text-amber-900">
+              No usable historical observations found
+            </p>
+            <p className="mt-1 text-sm text-amber-800">
+              Channel3 did not return valid price observations
+              in the selected product&apos;s currency.
+            </p>
+          </div>
+        )}
+
+      {state.status === "loaded" &&
+        state.productId === selected.id &&
+        analysis && (
+          <>
+            <PriceChart
+              points={chartPoints}
+              currency={selected.currency}
+            />
+
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Metric
+                label="Current shopping offer"
+                value={formatPrice(selected.price, selected.currency)}
+              />
+
+              <Metric
+                label="Channel3 tracked current price"
+                value={
+                  state.data.statistics &&
+                  state.data.statistics.currency.toUpperCase() ===
+                    selected.currency.toUpperCase()
+                    ? formatPrice(
+                        state.data.statistics.current_price,
+                        state.data.statistics.currency,
+                      )
+                    : "Unavailable"
+                }
+              />
+
+              <Metric
+                label="Channel3 price status"
+                value={
+                  state.data.statistics &&
+                  state.data.statistics.currency.toUpperCase() ===
+                    selected.currency.toUpperCase()
+                    ? state.data.statistics.current_status.toUpperCase()
+                    : "Unavailable"
+                }
+              />
+
+              <Metric
+                label="Historical average"
+                value={formatPrice(
+                  analysis.averagePrice,
+                  selected.currency,
+                )}
+              />
+
+              <Metric
+                label="Historical minimum"
+                value={formatPrice(
+                  analysis.minPrice,
+                  selected.currency,
+                )}
+              />
+
+              <Metric
+                label="Historical maximum"
+                value={formatPrice(
+                  analysis.maxPrice,
+                  selected.currency,
+                )}
+              />
+
+              <Metric
+                label="30-day observed low"
+                value={
+                  analysis.lowestPrice30Days === null
+                    ? "Insufficient data"
+                    : formatPrice(
+                        analysis.lowestPrice30Days,
+                        selected.currency,
+                      )
+                }
+              />
+
+              <Metric
+                label="Price volatility"
+                value={`${analysis.volatilityPercent.toFixed(1)}%`}
+              />
+
+              <Metric
+                label="Historical observations"
+                value={String(analysis.sampleCount)}
+              />
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                Shopping offer vs historical prices
+              </p>
+
+              <p className="mt-2 text-sm text-slate-700">
+                {analysis.priceAssessment === "below_average"
+                  ? "The selected shopping offer is more than 5% below the historical average."
+                  : analysis.priceAssessment === "above_average"
+                    ? "The selected shopping offer is more than 5% above the historical average."
+                    : "The selected shopping offer is within 5% of the historical average."}
+              </p>
+
+              <p className="mt-1 text-sm text-slate-600">
+                {Math.abs(analysis.currentVsAveragePercent).toFixed(1)}%
+                {" "}
+                {analysis.currentVsAveragePercent > 0
+                  ? "above"
+                  : analysis.currentVsAveragePercent < 0
+                    ? "below"
+                    : "equal to"}{" "}
+                the historical average.
+              </p>
+
+              <p className="mt-3 text-sm text-slate-700">
+                {analysis.recentLowAssessment === "insufficient_data"
+                  ? "There are not enough recent observations to assess the 30-day low."
+                  : analysis.recentLowAssessment === "at_or_below_low"
+                    ? "The selected shopping offer is at or below the lowest observed price in the last 30 days."
+                    : analysis.recentLowAssessment === "near_low"
+                      ? "The selected shopping offer is within 5% of the lowest observed price in the last 30 days."
+                      : "The selected shopping offer is more than 5% above the lowest observed price in the last 30 days."}
+              </p>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Analysis uses actual Channel3 observations returned
+              for this product. The 30-day low reflects available
+              observations, not estimated daily prices. Volatility
+              is calculated as population standard deviation divided
+              by the historical average.
+            </p>
+          </>
+        )}
     </section>
   );
 }
