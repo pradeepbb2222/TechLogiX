@@ -53,3 +53,6 @@ next-env.d.ts
 PayPal REST API Credentials.txt
 # OAuth credentials
 OAuth Client Credentials.json
+
+# Supabase CLI temporary files
+/supabase/.temp/

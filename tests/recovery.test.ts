@@ -87,6 +87,10 @@ function memoryStore(
       return { ...rec };
     },
 
+    async getByOrderId(id: string) {
+      return rec.orderId === id ? { ...rec } : null;
+    },
+
     async listByUser(userId: string) {
       return rec.userId === userId ? [{ ...rec }] : [];
     },
@@ -340,4 +344,48 @@ test("stale detection and retry", async () => {
       1,
     ),
   );
+});
+
+
+test("settle: tracking failure propagates and can be retried after completion", async () => {
+  const store = memoryStore();
+  let trackingAttempts = 0;
+
+  const createTracking = async () => {
+    trackingAttempts++;
+
+    if (trackingAttempts === 1) {
+      throw new Error("Tracking service unavailable");
+    }
+  };
+
+  await assert.rejects(
+    settleOutcome(
+      store,
+      store.rec,
+      { kind: "completed", captureId: "C1" },
+      {
+        allowRelease: true,
+        onCompleted: createTracking,
+      },
+    ),
+    /Tracking service unavailable/,
+  );
+
+  assert.equal(store.rec.status, "completed");
+  assert.equal(store.rec.captureId, "C1");
+
+  // Retry tracking without changing the completed payment.
+  const result = await settleOutcome(
+    store,
+    store.rec,
+    { kind: "completed", captureId: "C1" },
+    {
+      allowRelease: true,
+      onCompleted: createTracking,
+    },
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(trackingAttempts, 2);
 });

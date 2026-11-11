@@ -146,3 +146,37 @@ export function extractApproveUrl(order: PayPalOrder): string | null {
     return null;
   }
 }
+
+export interface PayPalWebhookTransmission {
+  authAlgo: string;
+  certUrl: string;
+  transmissionId: string;
+  transmissionSig: string;
+  transmissionTime: string;
+}
+
+export async function verifyWebhookSignature(
+  cfg: PayPalConfig,
+  webhookId: string,
+  transmission: PayPalWebhookTransmission,
+  event: unknown,
+): Promise<boolean> {
+  const result = await paypalFetch<{ verification_status?: string }>(
+    cfg,
+    "/v1/notifications/verify-webhook-signature",
+    {
+      method: "POST",
+      body: {
+        auth_algo: transmission.authAlgo,
+        cert_url: transmission.certUrl,
+        transmission_id: transmission.transmissionId,
+        transmission_sig: transmission.transmissionSig,
+        transmission_time: transmission.transmissionTime,
+        webhook_id: webhookId,
+        webhook_event: event,
+      },
+    },
+  );
+
+  return result.verification_status === "SUCCESS";
+}
