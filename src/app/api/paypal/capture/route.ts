@@ -1,4 +1,4 @@
-
+import { createTrackedOrder } from "@/features/order-tracking/services/trackingStorage";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { gateCapture } from "@/lib/checkout/logic";
 import { checkLimit } from "@/lib/limits";
@@ -31,6 +31,13 @@ import {
 const VERIFYING =
   "Payment outcome is being verified with PayPal. Do not pay again; check back shortly.";
 
+async function ensureTracking(record: TxRecord): Promise<void> {
+  if (!record.userId) {
+    throw new Error("Cannot create tracking without an order owner.");
+  }
+
+  await createTrackedOrder(record.orderId, record.userId);
+}
 /**
  * Captures an approved order.
  * Only the authenticated owner can access their transaction.
@@ -222,7 +229,10 @@ export async function POST(request: Request) {
     }
 
     return respond(
-      await settleOutcome(store, claimed, outcome, { allowRelease }),
+      await settleOutcome(store, claimed, outcome, {
+        allowRelease,
+        onCompleted: ensureTracking,
+      }),
     );
   } catch (err) {
     console.error(
@@ -258,6 +268,7 @@ async function reconcile(
 
     return await settleOutcome(store, record, outcome, {
       allowRelease: true,
+      onCompleted: ensureTracking,
     });
   } catch {
     return keepProcessing(

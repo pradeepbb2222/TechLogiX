@@ -104,6 +104,13 @@ export const fileStore: TxStore = {
       );
     }),
 
+  getByOrderId: (orderId: string) =>
+    withLock(async () => {
+      const records = await readAll();
+
+      return records.find((record) => record.orderId === orderId) ?? null;
+    }),
+
   listByUser: (userId: string) =>
     withLock(async () => filterByUser(await readAll(), userId)),
 

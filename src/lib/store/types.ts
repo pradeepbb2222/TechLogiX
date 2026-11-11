@@ -52,6 +52,9 @@ export interface TxStore {
   /** Retrieves an order only if it belongs to the specified user. */
   get(orderId: string, userId: string): Promise<TxRecord | null>;
 
+  /** Server-only lookup by PayPal order ID. */
+  getByOrderId(orderId: string): Promise<TxRecord | null>;
+
   /** Returns every transaction belonging to the specified user. */
   listByUser(userId: string): Promise<TxRecord[]>;
 
