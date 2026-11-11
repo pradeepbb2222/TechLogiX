@@ -9,10 +9,12 @@ export default function SettingsPage() {
 
   const [draftLimit, setDraftLimit] = useState(flow.spendingLimit);
   useEffect(() => {
-    if (!flow.isLimitLoading) {
-        setDraftLimit(flow.spendingLimit);
-    }
-}, [flow.spendingLimit, flow.isLimitLoading]);
+    if (flow.isLimitLoading) return;
+
+    queueMicrotask(() => {
+      setDraftLimit(flow.spendingLimit);
+    });
+  }, [flow.spendingLimit, flow.isLimitLoading]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

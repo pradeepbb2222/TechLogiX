@@ -92,7 +92,9 @@ const [limitSuccess, setLimitSuccess] = useState<string | null>(null);
   }, []);
 
   useEffect(() => {
-    void refreshSpendingLimit();
+    queueMicrotask(() => {
+      void refreshSpendingLimit();
+    });
   }, [refreshSpendingLimit]);
 
   const saveSpendingLimit = useCallback(async (limit: number) => {
@@ -222,7 +224,7 @@ const [limitSuccess, setLimitSuccess] = useState<string | null>(null);
         setIsSearching(false);
       }
     },
-    [log, spendingLimit],
+    [log],
   );
 
   const selectProduct = useCallback((id: string) => {
