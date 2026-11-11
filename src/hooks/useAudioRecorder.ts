@@ -153,6 +153,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
 
       recorder.onstop = async () => {
+        // If component unmounted, clean up and exit
+        if (!isMountedRef.current) {
+          releaseStream();
+          resolve("");
+          return;
+        }
         setIsRecording(false);
         releaseStream();
 
@@ -160,7 +166,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         chunksRef.current = [];
 
         if (chunks.length === 0) {
-          setErrorMessage("Recording was empty. Please try again.");
+          if (isMountedRef.current) setErrorMessage("Recording was empty. Please try again.");
           resolve("");
           return;
         }
@@ -169,7 +175,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         const blob = new Blob(chunks, { type: mimeType });
 
         if (blob.size === 0) {
-          setErrorMessage("Recording was empty. Please try again.");
+          if (isMountedRef.current) setErrorMessage("Recording was empty. Please try again.");
           resolve("");
           return;
         }
@@ -187,9 +193,17 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             method: "POST",
             body: form,
           });
+          if (!isMountedRef.current) {
+            resolve("");
+            return;
+          }
 
           if (!response.ok) {
             const body = await response.json().catch(() => ({}));
+            if (!isMountedRef.current) {
+              resolve("");
+              return;
+            }
             const message =
               typeof body?.error === "string"
                 ? body.error
@@ -200,6 +214,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           }
 
           const data = await response.json();
+          if (!isMountedRef.current) {
+            resolve("");
+            return;
+          }
           const transcript: string =
             typeof data?.text === "string" ? data.text : "";
 
@@ -211,12 +229,14 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
           resolve(transcript);
         } catch {
-          setErrorMessage(
-            "Network error while transcribing. Please check your connection and try again.",
-          );
+          if (isMountedRef.current) {
+            setErrorMessage(
+              "Network error while transcribing. Please check your connection and try again.",
+            );
+          }
           resolve("");
         } finally {
-          setIsTranscribing(false);
+          if (isMountedRef.current) setIsTranscribing(false);
         }
       };
 
