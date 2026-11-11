@@ -7,6 +7,7 @@ import { CHECKOUT_CONTEXT_KEY } from "@/lib/checkout-context";
 import type { PaymentResponse, PaymentStatus, Transaction } from "@/lib/types";
 import { Card, usd } from "./Card";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { ReceiptModal } from "./ReceiptModal";
 
 type Mode = "return" | "cancel";
 interface Result extends Partial<PaymentResponse> {
@@ -33,6 +34,7 @@ export function PaymentResult({ mode }: { mode: Mode }) {
   const orderId = useSearchParams().get("token");
   const started = useRef(false);
   const [loading, setLoading] = useState(Boolean(orderId));
+  const [showReceipt, setShowReceipt] = useState(false);
   const [result, setResult] = useState<Result>(() =>
     orderId ? {} : { unavailable: true, message: "Missing PayPal order reference." },
   );
@@ -119,6 +121,15 @@ export function PaymentResult({ mode }: { mode: Mode }) {
         </p>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
+          {!loading && known && status === "completed" && orderId && (
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            >
+              View Receipt
+            </button>
+          )}
           {canRetry && (
             <Link href="/" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
               Try again (starts a fresh checkout)
@@ -129,6 +140,9 @@ export function PaymentResult({ mode }: { mode: Mode }) {
           </Link>
         </div>
       </Card>
+      {showReceipt && orderId && (
+        <ReceiptModal orderId={orderId} onClose={() => setShowReceipt(false)} />
+      )}
     </main>
   );
 }
