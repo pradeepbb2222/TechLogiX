@@ -447,7 +447,48 @@ export async function searchProducts(
   }
 
   // Gemini ranks only products that passed backend validation.
-  const ranking = await rankProducts(intent, eligible);
+let ranking;
+let usedFallback = false;
+
+try {
+  ranking = await rankProducts(intent, eligible);
+} catch (error) {
+  console.error(
+    "Gemini ranking unavailable. Using fallback ranking:",
+    error,
+  );
+
+  usedFallback = true;
+
+  const sortedProducts = [...eligible].sort((a, b) => {
+    const ratingA = a.rating ?? 0;
+    const ratingB = b.rating ?? 0;
+
+    if (ratingA !== ratingB) {
+      return ratingB - ratingA;
+    }
+
+    const reviewsA = a.reviews ?? 0;
+    const reviewsB = b.reviews ?? 0;
+
+    if (reviewsA !== reviewsB) {
+      return reviewsB - reviewsA;
+    }
+
+    return a.price - b.price;
+  });
+
+  const fallbackRankings = sortedProducts.map((product, index) => ({
+    productId: product.id,
+    score: Math.max(50, 100 - index * 10),
+    reason:
+      "Fallback ranking based on actual product ratings, review counts and price. Gemini ranking was unavailable.",
+  }));
+
+  ranking = {
+    rankings: fallbackRankings,
+  };
+}
 
   // Ensure Gemini returned every eligible product exactly once.
   const rankingIds = ranking.rankings.map(
@@ -482,7 +523,9 @@ export async function searchProducts(
       return {
         ...product,
         score: Math.round(result.score),
-        aiReason: result.reason,
+        aiReason: usedFallback
+  ? `Automatic fallback: ${result.reason}`
+  : result.reason,
 
         // Backend validation remains authoritative.
         requirements: product.requirements,
@@ -501,7 +544,10 @@ export async function searchProducts(
         : "") +
       `. My top pick is ${top.name} from ${top.merchant} ` +
       `at $${top.price.toFixed(2)}. ` +
-      "Review the product and approve before payment.",
+      "Review the product and approve before payment." +
+(usedFallback
+  ? " Gemini ranking was temporarily unavailable, so fallback ranking was used."
+  : ""),
     products: ranked,
     recommendedId: top.id,
     parsedBudget,

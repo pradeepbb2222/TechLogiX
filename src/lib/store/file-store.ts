@@ -43,6 +43,43 @@ async function writeAll(records: TxRecord[]): Promise<void> {
 export const fileStore: TxStore = {
   kind: "file",
 
+  reserveCheckout: (record: NewTxRecord) =>
+    withLock(async () => {
+      const all = await readAll();
+
+      if (all.some((r) => r.orderId === record.orderId)) {
+        throw new DuplicateOrderError(record.orderId);
+      }
+
+      const limitCents = record.limitCents;
+
+      const committed = all
+        .filter(
+          (r) =>
+            r.userId === record.userId &&
+            ["awaiting_approval", "processing", "completed"].includes(r.status),
+        )
+        .reduce((sum, r) => sum + r.amountCents, 0);
+
+      if (committed + record.amountCents > limitCents) {
+        return {
+          reserved: false,
+          message: "Spending limit exceeded.",
+          currentLimitCents: limitCents,
+          committedCents: committed,
+        };
+      }
+
+      await writeAll([record, ...all]);
+
+      return {
+        reserved: true,
+        message: "Checkout spending reserved.",
+        currentLimitCents: limitCents,
+        committedCents: committed + record.amountCents,
+      };
+    }),
+
   create: (record: NewTxRecord) =>
     withLock(async () => {
       const all = await readAll();

@@ -57,6 +57,40 @@ function memoryStore(
 
     all: () => records,
 
+    async reserveCheckout(record: NewTxRecord) {
+      if (records.some((r) => r.orderId === record.orderId)) {
+        throw new Error("duplicate");
+      }
+
+      const committed = records
+        .filter(
+          (r) =>
+            r.userId === record.userId &&
+            ["awaiting_approval", "processing", "completed"].includes(r.status),
+        )
+        .reduce((sum, r) => sum + r.amountCents, 0);
+
+      const limitCents = record.limitCents;
+
+      if (committed + record.amountCents > limitCents) {
+        return {
+          reserved: false,
+          message: "Spending limit exceeded.",
+          currentLimitCents: limitCents,
+          committedCents: committed,
+        };
+      }
+
+      records = [record, ...records];
+
+      return {
+        reserved: true,
+        message: "Checkout spending reserved.",
+        currentLimitCents: limitCents,
+        committedCents: committed + record.amountCents,
+      };
+    },
+
     async create(r: NewTxRecord) {
       if (records.some((x) => x.orderId === r.orderId)) {
         throw new Error("duplicate");

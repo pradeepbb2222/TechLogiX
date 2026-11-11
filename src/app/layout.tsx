@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PayPal AgentFlow",
-  description: "AI-powered shopping agent with human-approved payments",
+  title: "CogniCart | AI Shopping Assistant",
+description: "Discover products, compare options, and shop securely with AI-powered assistance and user-approved PayPal payments.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

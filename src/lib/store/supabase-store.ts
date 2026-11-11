@@ -47,7 +47,7 @@ export function createSupabaseStore(
   serviceKey: string,
 ): TxStore {
   const base = `${url.replace(/\/+$/, "")}/rest/v1/transactions`;
-
+  const rpcBase = `${url.replace(/\/+$/, "")}/rest/v1/rpc`;
   const headers = {
     apikey: serviceKey,
     Authorization: `Bearer ${serviceKey}`,
@@ -71,13 +71,68 @@ export function createSupabaseStore(
       throw new Error(`Supabase request failed (${res.status}).`);
     }
 
-    return res.status === 204
-      ? []
-      : ((await res.json()) as Row[]);
+    if (
+  res.status === 204 ||
+  init.prefer?.split(",").some((value) => value.trim() === "return=minimal")
+) {
+  return [];
+}
+
+return (await res.json()) as Row[];
+  }
+    async function rpcRequest<T>(
+    functionName: string,
+    body: Record<string, unknown>,
+  ): Promise<T> {
+    const res = await fetch(`${rpcBase}/${functionName}`, {
+      method: "POST",
+      cache: "no-store",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Supabase RPC failed (${res.status}).`);
+    }
+
+    return (await res.json()) as T;
   }
 
   return {
     kind: "supabase",
+
+    async reserveCheckout(record: NewTxRecord) {
+      const rows = await rpcRequest<
+        {
+          reserved: boolean;
+          message: string;
+          current_limit_cents: number;
+          committed_cents: number;
+        }[]
+      >("reserve_checkout", {
+        p_user_id: record.userId,
+        p_order_id: record.orderId,
+        p_product_id: record.productId,
+        p_product_name: record.productName,
+        p_merchant: record.merchant,
+        p_amount_cents: record.amountCents,
+        p_currency: record.currency,
+        p_note: record.note ?? "Waiting for PayPal buyer approval",
+      });
+
+      const result = rows[0];
+
+      if (!result) {
+        throw new Error("Spending reservation returned no result.");
+      }
+
+      return {
+        reserved: result.reserved,
+        message: result.message,
+        currentLimitCents: result.current_limit_cents,
+        committedCents: result.committed_cents,
+      };
+    },
 
     async create(r: NewTxRecord) {
       await request("", {

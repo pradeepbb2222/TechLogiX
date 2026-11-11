@@ -24,13 +24,17 @@ interface CheckoutContext {
 }
 
 export function useAgentFlow() {
-  const [spendingLimit, setSpendingLimit] = useState(150);
+  const [spendingLimit, setSpendingLimit] = useState(1000);
+const [isLimitLoading, setIsLimitLoading] = useState(true);
+const [isLimitSaving, setIsLimitSaving] = useState(false);
+const [limitError, setLimitError] = useState<string | null>(null);
+const [limitSuccess, setLimitSuccess] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       // Static id/timestamp: no random or time values during prerender.
       id: "welcome",
       role: "agent",
-      text: "Hi! I'm AgentFlow. Tell me what to buy and your budget, e.g. \"wireless headphones under $100\". I'll compare options and ask for your approval before any payment.",
+      text: "Hi! I'm CogniCart. Tell me what to buy and your budget, e.g. \"wireless headphones under $100\". I'll compare options and ask for your approval before any payment.",
       createdAt: "",
     },
   ]);
@@ -60,6 +64,69 @@ export function useAgentFlow() {
     }
   }, []);
 
+  const refreshSpendingLimit = useCallback(async () => {
+    setIsLimitLoading(true);
+    setLimitError(null);
+
+    try {
+      const res = await fetch("/api/settings/spending-limit", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Could not load spending limit.");
+      }
+
+      setSpendingLimit(data.limitUsd);
+    } catch (error) {
+      setLimitError(
+        error instanceof Error
+          ? error.message
+          : "Could not load spending limit.",
+      );
+    } finally {
+      setIsLimitLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSpendingLimit();
+  }, [refreshSpendingLimit]);
+
+  const saveSpendingLimit = useCallback(async (limit: number) => {
+  setIsLimitSaving(true);
+  setLimitError(null);
+  setLimitSuccess(null);
+
+  try {
+    const res = await fetch("/api/settings/spending-limit", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limitUsd: limit }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Could not save spending limit.");
+    }
+
+    setSpendingLimit(data.limitUsd);
+    setLimitSuccess("Spending limit saved successfully.");
+    return true;
+  } catch (error) {
+    setLimitError(
+      error instanceof Error
+        ? error.message
+        : "Could not save spending limit.",
+    );
+    return false;
+  } finally {
+    setIsLimitSaving(false);
+  }
+}, []);
   // Restore the shopping context saved before the PayPal redirect (this browser tab only).
   useEffect(() => {
     queueMicrotask(() => {
@@ -70,7 +137,6 @@ export function useAgentFlow() {
         if (!Array.isArray(ctx.products) || ctx.products.length === 0) return;
         setProducts(ctx.products);
         setRecommendedId(ctx.recommendedId ?? null);
-        if (typeof ctx.spendingLimit === "number") setSpendingLimit(ctx.spendingLimit);
         if (ctx.selectedId && ctx.products.some((p) => p.id === ctx.selectedId)) {
           setSelectedId(ctx.selectedId);
           // A fresh checkout always needs a fresh explicit approval.
@@ -130,13 +196,13 @@ export function useAgentFlow() {
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, spendingLimit }),
+          body: JSON.stringify({ message: text }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Request failed");
         const data = (await res.json()) as SearchResponse;
         setProducts(data.products);
         setRecommendedId(data.recommendedId);
-        setSelectedId(data.recommendedId);
+        setSelectedId(null);
         setMessages((m) => [...m, { id: uid(), role: "agent", text: data.reply, createdAt: now() }]);
         if (data.parsedBudget !== null) log("Budget detected", "info", `$${data.parsedBudget.toFixed(2)}`);
         log(
@@ -145,9 +211,9 @@ export function useAgentFlow() {
           data.products.length ? `${data.products.length} option(s) ranked` : undefined,
         );
         if (data.recommendedId) {
-          setPaymentStatus("awaiting_approval");
-          log("Awaiting your approval", "warning", "Select a product and approve to continue");
-        }
+  setPaymentStatus("not_started");
+  log("Products ready for review", "success", "Select a product to continue");
+}
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         setMessages((m) => [...m, { id: uid(), role: "agent", text: `Sorry, something went wrong: ${msg}`, createdAt: now() }]);
@@ -192,11 +258,10 @@ export function useAgentFlow() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-  productId: selected.id,
-  expectedPrice: selected.price,
-  spendingLimit,
-  approved: true,
-}),
+        productId: selected.id,
+        expectedPrice: selected.price,
+        approved: true,
+  }),
       });
       const data = (await res.json()) as PaymentResponse & { approveUrl?: string };
       if (!res.ok || !data.approveUrl) {
@@ -237,9 +302,32 @@ export function useAgentFlow() {
   }, [selected]);
 
   return {
-    spendingLimit, setSpendingLimit, spent, remaining,
-    messages, events, products, recommendedId, selected, selectedId,
-    transactions, paymentStatus, paymentMessage, isSearching,
-    sendMessage, selectProduct, approve, cancel, retry,
-  };
+  spendingLimit,
+  setSpendingLimit,
+  saveSpendingLimit,
+  refreshSpendingLimit,
+  isLimitLoading,
+  isLimitSaving,
+  limitError,
+  limitSuccess,
+  setLimitError,
+  setLimitSuccess,
+  spent,
+  remaining,
+  messages,
+  events,
+  products,
+  recommendedId,
+  selected,
+  selectedId,
+  transactions,
+  paymentStatus,
+  paymentMessage,
+  isSearching,
+  sendMessage,
+  selectProduct,
+  approve,
+  cancel,
+  retry,
+};
 }
