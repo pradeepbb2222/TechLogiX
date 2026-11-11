@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useAgentFlowContext } from "@/providers/AgentFlowProvider";
-
+import { PriceHistoryPanel } from "@/components/PriceHistoryPanel";
 export default function CheckoutPage() {
   const { flow } = useAgentFlowContext();
   const selected = flow.selected;
@@ -95,6 +95,7 @@ export default function CheckoutPage() {
     </div>
   </div>
 </section>
+<PriceHistoryPanel selected={selected} />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
   <div className="flex items-center justify-between gap-3">
