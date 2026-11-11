@@ -106,26 +106,36 @@ export async function settleOutcome(
   store: TxStore,
   record: TxRecord,
   outcome: OrderOutcome,
-  opts: { allowRelease: boolean },
+  opts: {
+    allowRelease: boolean;
+    onCompleted?: (record: TxRecord) => Promise<void>;
+  },
 ): Promise<TxRecord> {
   if (!record.userId) return record;
 
-  switch (outcome.kind) {
-    case "completed":
+    switch (outcome.kind) {
+      case "completed": {
       await saveCaptureId(store, record, outcome.captureId);
 
-      return fromProcessing(store, record, {
+      const completed = await fromProcessing(store, record, {
         status: "completed",
         captureId: outcome.captureId,
         note: "Payment captured and verified with PayPal Sandbox.",
       });
+
+      if (completed.status === "completed" && opts.onCompleted) {
+        await opts.onCompleted(completed);
+      }
+
+      return completed;
+    }
 
     case "pending":
       await saveCaptureId(store, record, outcome.captureId);
 
       return fromProcessing(store, record, {
         captureId: outcome.captureId,
-        note: "PayPal reports the capture as pending. The payment outcome is being verified and will be re-checked.",
+        note: "The payment outcome is being verified and will be re-checked.",
       });
 
     case "failed":

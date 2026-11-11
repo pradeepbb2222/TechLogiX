@@ -106,6 +106,9 @@ function memoryStore(
         ) ?? null
       );
     },
+    async getByOrderId(id: string) {
+      return records.find((r) => r.orderId === id) ?? null;
+    },
 
     async listByUser(userId: string) {
       return filterByUser(records, userId);

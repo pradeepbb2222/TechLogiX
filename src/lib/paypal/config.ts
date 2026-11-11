@@ -61,3 +61,14 @@ export function getMaxPendingOrders(): number {
 export function getAppUrl(): string {
   return (process.env.APP_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
 }
+
+/** Returns the configured PayPal webhook ID. */
+export function getPayPalWebhookId(): string {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID?.trim();
+
+  if (!webhookId) {
+    throw new PayPalConfigError("Missing PAYPAL_WEBHOOK_ID in .env.local.");
+  }
+
+  return webhookId;
+}

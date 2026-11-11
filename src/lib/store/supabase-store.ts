@@ -162,6 +162,14 @@ return (await res.json()) as Row[];
       return rows[0] ? fromRow(rows[0]) : null;
     },
 
+    async getByOrderId(orderId: string) {
+      const rows = await request(
+        `?order_id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`,
+      );
+
+      return rows[0] ? fromRow(rows[0]) : null;
+    },
+
     async listByUser(userId: string) {
       const pageSize = 100;
       const allRows: Row[] = [];

@@ -1,3 +1,4 @@
+
 {
   "name": "paypal",
   "version": "0.1.0",
@@ -31,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "jsdom": "^29.1.1",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
