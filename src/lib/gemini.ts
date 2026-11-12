@@ -97,13 +97,9 @@ async function generateGroqJson<T>(
   }
 
   // Accept both a direct ranking array and { rankings: [...] }.
-  if (
-    schema === productRankingSchema &&
-    Array.isArray(parsed)
-  ) {
-    parsed = { rankings: parsed };
-  }
-
+  if (Array.isArray(parsed)) {
+  parsed = { rankings: parsed };
+}
   return schema.parse(parsed);
 }
 
