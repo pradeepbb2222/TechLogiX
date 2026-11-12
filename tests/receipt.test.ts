@@ -1,17 +1,17 @@
+
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ownsRecord } from "../src/lib/checkout/logic.ts";
+import { ownsRecord } from "../src/lib/checkout/logic";
 import {
   buildReceipt,
   InvalidReceiptStatusError,
   MissingCaptureIdError,
-} from "../src/lib/receipt/generator.ts";
-import { hashSessionId, newSessionId, readSession, sessionCookieHeader, SESSION_COOKIE } from "../src/lib/security/session.ts";
-import type { PaymentStatus } from "../src/lib/types.ts";
-import type { TxRecord } from "../src/lib/store/types.ts";
+} from "../src/lib/receipt/generator";
+import type { PaymentStatus } from "../src/lib/types";
+import type { TxRecord } from "../src/lib/store/types";
 
-const OWNER_A = hashSessionId("a".repeat(43));
-const OWNER_B = hashSessionId("b".repeat(43));
+const USER_A = "supabase-user-a";
+const USER_B = "supabase-user-b";
 
 function mockRecord(overrides: Partial<TxRecord> = {}): TxRecord {
   return {
@@ -23,7 +23,7 @@ function mockRecord(overrides: Partial<TxRecord> = {}): TxRecord {
     amountCents: 7999,
     currency: "USD",
     limitCents: 100000,
-    ownerHash: OWNER_A,
+    userId: USER_A,
     status: "completed",
     note: "Payment captured and verified with PayPal Sandbox.",
     createdAt: "2026-11-09T10:00:00.000Z",
@@ -52,8 +52,7 @@ test("buildReceipt: successfully generates receipt for completed verified transa
   assert.equal(receipt.item.amount, 79.99);
   assert.equal(receipt.note, "Payment captured and verified with PayPal Sandbox.");
 
-  // Sensitive internal fields must not be exposed
-  assert.equal("ownerHash" in receipt, false);
+  assert.equal("userId" in receipt, false);
   assert.equal("limitCents" in receipt, false);
 });
 
@@ -68,6 +67,7 @@ test("buildReceipt: rejects non-completed statuses", () => {
 
   for (const status of nonCompletedStatuses) {
     const rec = mockRecord({ status });
+
     assert.throws(
       () => buildReceipt(rec),
       (err: unknown) => {
@@ -75,29 +75,31 @@ test("buildReceipt: rejects non-completed statuses", () => {
         assert.match(err.message, new RegExp(status));
         return true;
       },
-      `Expected error for status ${status}`
+      `Expected error for status ${status}`,
     );
   }
 });
 
 test("buildReceipt: rejects missing or empty captureId", () => {
   const recWithoutCapture = mockRecord({ captureId: undefined });
+
   assert.throws(
     () => buildReceipt(recWithoutCapture),
     (err: unknown) => {
       assert(err instanceof MissingCaptureIdError);
       assert.match(err.message, /missing verified PayPal capture ID/);
       return true;
-    }
+    },
   );
 
   const recWithEmptyCapture = mockRecord({ captureId: "" });
+
   assert.throws(
     () => buildReceipt(recWithEmptyCapture),
     (err: unknown) => {
       assert(err instanceof MissingCaptureIdError);
       return true;
-    }
+    },
   );
 });
 
@@ -128,48 +130,31 @@ test("buildReceipt: converts integer cents accurately to decimal amount", () => 
   assert.equal(buildReceipt(rec3).amount, 1234.56);
 });
 
-test("security: ownsRecord prevents cross-user access and handles missing sessions", () => {
-  const rec = mockRecord({ ownerHash: OWNER_A });
+test("security: ownsRecord prevents cross-user access", () => {
+  const rec = mockRecord({ userId: USER_A });
 
-  // Matching session
-  assert.equal(ownsRecord(rec, OWNER_A), true);
+  assert.equal(ownsRecord(rec, USER_A), true);
+  assert.equal(ownsRecord(rec, USER_B), false);
 
-  // Cross-user session
-  assert.equal(ownsRecord(rec, OWNER_B), false);
-
-  // Missing session
   assert.equal(ownsRecord(rec, null), false);
   assert.equal(ownsRecord(rec, undefined), false);
   assert.equal(ownsRecord(rec, ""), false);
-
-  // Legacy record without ownerHash
-  const legacyRec = mockRecord({ ownerHash: undefined });
-  assert.equal(ownsRecord(legacyRec, OWNER_A), false);
 });
 
-test("security: session parsing from cookie header for receipt requests", () => {
-  const sid = newSessionId();
-  const cookieHeader = sessionCookieHeader(sid, false);
+test("security: legacy transactions without userId are never accessible", () => {
+  const legacyRec = mockRecord({ userId: null });
 
-  const session = readSession(cookieHeader);
-  assert.ok(session);
-  assert.equal(session.id, sid);
-  assert.equal(session.hash, hashSessionId(sid));
-
-  // Invalid cookie format
-  assert.equal(readSession(`${SESSION_COOKIE}=invalid-short`), null);
-  assert.equal(readSession(null), null);
-  assert.equal(readSession("other_cookie=value"), null);
+  assert.equal(ownsRecord(legacyRec, USER_A), false);
+  assert.equal(ownsRecord(legacyRec, null), false);
 });
 
-test("validation: orderId regex accepts valid PayPal IDs and rejects path traversal or invalid characters", () => {
+test("validation: orderId regex accepts valid PayPal IDs and rejects invalid characters", () => {
   const ORDER_ID_REGEX = /^[A-Za-z0-9-]{8,40}$/;
 
   assert.equal(ORDER_ID_REGEX.test("5O190127TN364715T"), true);
   assert.equal(ORDER_ID_REGEX.test("ORD-1234-5678"), true);
   assert.equal(ORDER_ID_REGEX.test("ABCDEFGH"), true);
 
-  // Invalid or malicious inputs
   assert.equal(ORDER_ID_REGEX.test("../traversal"), false);
   assert.equal(ORDER_ID_REGEX.test("short"), false);
   assert.equal(ORDER_ID_REGEX.test(""), false);
