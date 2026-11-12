@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createOrderTrackingHandler } from "../src/features/order-tracking/api/orderTrackingHandler";
+import { POST as advanceOrderStatus } from "../src/app/api/order-tracking/[orderId]/advance/route";
 
 function createTestHandler(options?: {
   user?: { id: string } | null;
@@ -132,4 +133,13 @@ test("returns 500 for unexpected errors", async () => {
   );
 
   assert.equal(response.status, 500);
+});
+
+test("does not allow customers to advance delivery status manually", async () => {
+  const response = await advanceOrderStatus();
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), {
+    error: "Delivery status updates are managed automatically.",
+  });
 });
