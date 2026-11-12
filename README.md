@@ -2,9 +2,9 @@ CogniCart – AI-Powered Shopping Assistant
 
 CogniCart is an AI-powered shopping platform designed to make online shopping more intelligent, transparent, and secure. It enables users to discover products through natural-language requests, compare available options, analyze historical prices, manage personal spending limits, track orders, and make purchases with explicit user approval.
 
-By combining multiple AI models, real-world product discovery, intelligent product comparison, and secure payment workflows, CogniCart aims to provide a smarter and more controlled shopping experience.
+By combining AI-powered natural-language understanding, real-world product discovery, intelligent product comparison, and secure payment workflows, CogniCart aims to provide a smarter and more controlled shopping experience.
 
-Built using Next.js, TypeScript, Tailwind CSS, Supabase, Google Gemini, Groq, Channel3, and PayPal Sandbox.
+Built using Next.js, TypeScript, Tailwind CSS, Supabase, Google Gemini, Channel3, and PayPal Sandbox.
 
 Features
 
@@ -22,13 +22,12 @@ Features
 - Generate AI-assisted product rankings and recommendations.
 - Present product highlights to help users make informed purchasing decisions.
 
-3. Multi-LLM Integration
+3. Gemini-Powered AI Integration
 
-- Integrate Google Gemini and Groq to support AI-powered shopping workflows.
-- Use Groq-hosted GPT-OSS 20B for natural-language intent understanding.
-- Use Groq-hosted GPT-OSS 120B for product comparison and ranking.
-- Use structured AI responses to connect natural-language requests with product discovery and recommendation workflows.
-- Retain Gemini-powered functionality for speech-to-text.
+- Integrate Google Gemini API to support AI-powered shopping workflows.
+- Use Gemini for natural-language intent understanding and structured requirement extraction.
+- Support AI-assisted product comparison and ranking.
+- Generate structured AI responses to connect natural-language requests with product discovery and recommendation workflows.
 
 4. Voice-Based Shopping Input
 
@@ -112,10 +111,10 @@ Component| Technology
 Frontend| Next.js App Router, React, TypeScript
 Styling| Tailwind CSS
 Backend Runtime| Node.js
-AI / LLM| Google Gemini API, Groq API
+AI / LLM| Google Gemini API
 AI Integration| Vercel AI SDK
-Intent Understanding| Groq GPT-OSS 20B
-Product Comparison and Ranking| Groq GPT-OSS 120B
+Intent Understanding| Google Gemini API
+Product Comparison and Ranking| Google Gemini API
 Speech-to-Text| Google Gemini API
 Product Discovery| Channel3 API
 Payment Processing| PayPal Orders API v2 (Sandbox)
@@ -133,7 +132,7 @@ CogniCart follows a full-stack architecture built around Next.js App Router.
 
 - Frontend: React and Tailwind CSS provide the shopping interface, product comparison, spending controls, transaction history, receipts, and order tracking.
 - Backend: Next.js API routes handle authentication, product-related operations, AI workflows, payment processing, transcription, and order tracking.
-- AI Layer: Google Gemini and Groq provide AI capabilities for natural-language understanding, product comparison, ranking, and speech-to-text.
+- AI Layer: Google Gemini provides AI capabilities for natural-language understanding, product comparison, ranking, and speech-to-text.
 - Product Data Layer: Channel3 provides product discovery and historical pricing data.
 - Database Layer: Supabase PostgreSQL stores user-related information, transactions, order records, and price-history infrastructure.
 - Payment Layer: PayPal Sandbox handles payment approval and capture workflows.
@@ -142,14 +141,13 @@ CogniCart follows a full-stack architecture built around Next.js App Router.
 
 Setup
 
-Prerequisites:
+Prerequisites
 
 - Node.js 20+
 - npm
 - A Supabase project
 - PayPal Sandbox REST application credentials
 - Google Gemini API key
-- Groq API key
 - Channel3 API access
 - Upstash Redis credentials, if required by the configured integrations
 
@@ -179,7 +177,7 @@ Variable| Purpose
 "SUPABASE_URL"| Server-side Supabase project URL
 "SUPABASE_SERVICE_ROLE_KEY"| Server-side Supabase service-role key
 
-Also configure the Gemini, Groq, Channel3, and Upstash credentials required by the corresponding integrations. Refer to ".env.example" and the application configuration for the exact variable names.
+Also configure the Gemini, Channel3, and Upstash credentials required by the corresponding integrations. Refer to ".env.example" and the application configuration for the exact variable names.
 
 Use your own API credentials and service configurations.
 
@@ -217,9 +215,9 @@ Product Discovery and AI Workflow
 
 1. The user enters a shopping request using text or voice.
 2. Voice requests are converted into text through Gemini-powered transcription.
-3. Groq interprets the user's shopping request and extracts structured requirements.
+3. Gemini interprets the user's shopping request and extracts structured requirements.
 4. Channel3 retrieves relevant product information.
-5. Groq evaluates available products against the user's requirements and generates a ranked shortlist.
+5. Gemini evaluates available products against the user's requirements and generates a ranked shortlist.
 6. Products are presented with relevant details, prices, ratings, and recommendations.
 7. Historical price information can be retrieved and analyzed to provide additional purchasing context.
 8. The user selects a product and reviews its price and available spending limit.
@@ -348,23 +346,23 @@ Deployment requires:
 2. Configuring the required production environment variables.
 3. Configuring Supabase authentication and database migrations.
 4. Ensuring required scheduled jobs are active.
-5. Configuring Gemini, Groq, and Channel3 API credentials.
+5. Configuring Gemini and Channel3 API credentials.
 6. Verifying PayPal Sandbox configuration.
 7. Testing the deployed application and payment workflow.
 
 Planned Enhancements
 
-- Advanced AI shopping agents: Improve multi-step shopping assistance, contextual reasoning, and product-selection capabilities.
-- Real-time logistics integration: Connect with external courier and logistics providers for actual shipment updates.
-- Production payment readiness: Evaluate and implement the additional security, compliance, and operational requirements needed before supporting live PayPal payments.
-- Personalized recommendations: Improve product recommendations based on user preferences and shopping behavior.
-- Enhanced price intelligence: Introduce more advanced price-trend insights and purchasing recommendations.
-- Agentic purchasing workflows: Develop more advanced AI-assisted purchasing workflows while preserving explicit user approval and strict spending safeguards.
+- Advanced AI Shopping Agents: Improve multi-step shopping assistance, contextual reasoning, and product-selection capabilities.
+- Real-Time Logistics Integration: Connect with external courier and logistics providers for actual shipment updates.
+- Production Payment Readiness: Evaluate and implement the additional security, compliance, and operational requirements needed before supporting live PayPal payments.
+- Personalized Recommendations: Improve product recommendations based on user preferences and shopping behavior.
+- Enhanced Price Intelligence: Introduce more advanced price-trend insights and purchasing recommendations.
+- Agentic Purchasing Workflows: Develop more advanced AI-assisted purchasing workflows while preserving explicit user approval and strict spending safeguards.
 
 Project Vision
 
 CogniCart aims to transform conventional online shopping into an intelligent, transparent, and user-controlled experience.
 
-By combining multi-LLM intelligence, real-world product discovery, historical price analysis, personalized spending controls, secure payments, and automated order tracking, CogniCart helps users make better purchasing decisions while retaining control over every transaction.
+By combining AI-powered intelligence, real-world product discovery, historical price analysis, personalized spending controls, secure payments, and automated order tracking, CogniCart helps users make better purchasing decisions while retaining control over every transaction.
 
 Shop with Ease. Pay with Peace.
