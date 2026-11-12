@@ -1,3 +1,4 @@
+
 import { searchChannel3Products } from "./channel3";
 import { rankProducts } from "./gemini";
 import type { Product, SearchResponse } from "./types";
@@ -44,11 +45,11 @@ function getAttributeAliases(attribute: string): string[] {
     display: ["display", "screen", "screen size"],
     resolution: ["resolution", "display resolution"],
     bluetooth: [
-  "bluetooth",
-  "bluetooth version",
-  "connectivity-technology",
-  "audio-connectivity",
-],
+      "bluetooth",
+      "bluetooth version",
+      "connectivity-technology",
+      "audio-connectivity",
+    ],
     weight: ["weight", "item weight"],
     color: ["color", "colour"],
 
@@ -69,10 +70,10 @@ function getAttributeAliases(attribute: string): string[] {
   const normalized = normalize(attribute);
 
   const matchingAlias = Object.entries(aliases).find(
-  ([key]) => normalize(key) === normalized,
-);
+    ([key]) => normalize(key) === normalized,
+  );
 
-return matchingAlias?.[1] ?? [attribute];
+  return matchingAlias?.[1] ?? [attribute];
 }
 
 function getAttributeValues(
@@ -446,51 +447,51 @@ export async function searchProducts(
     };
   }
 
-  // Gemini ranks only products that passed backend validation.
-let ranking;
-let usedFallback = false;
+  // Groq ranks only products that passed backend validation.
+  let ranking;
+  let usedFallback = false;
 
-try {
-  ranking = await rankProducts(intent, eligible);
-} catch (error) {
-  console.error(
-    "Gemini ranking unavailable. Using fallback ranking:",
-    error,
-  );
+  try {
+    ranking = await rankProducts(intent, eligible);
+  } catch (error) {
+    console.error(
+      "Groq ranking unavailable. Using fallback ranking:",
+      error,
+    );
 
-  usedFallback = true;
+    usedFallback = true;
 
-  const sortedProducts = [...eligible].sort((a, b) => {
-    const ratingA = a.rating ?? 0;
-    const ratingB = b.rating ?? 0;
+    const sortedProducts = [...eligible].sort((a, b) => {
+      const ratingA = a.rating ?? 0;
+      const ratingB = b.rating ?? 0;
 
-    if (ratingA !== ratingB) {
-      return ratingB - ratingA;
-    }
+      if (ratingA !== ratingB) {
+        return ratingB - ratingA;
+      }
 
-    const reviewsA = a.reviews ?? 0;
-    const reviewsB = b.reviews ?? 0;
+      const reviewsA = a.reviews ?? 0;
+      const reviewsB = b.reviews ?? 0;
 
-    if (reviewsA !== reviewsB) {
-      return reviewsB - reviewsA;
-    }
+      if (reviewsA !== reviewsB) {
+        return reviewsB - reviewsA;
+      }
 
-    return a.price - b.price;
-  });
+      return a.price - b.price;
+    });
 
-  const fallbackRankings = sortedProducts.map((product, index) => ({
-    productId: product.id,
-    score: Math.max(50, 100 - index * 10),
-    reason:
-      "Fallback ranking based on actual product ratings, review counts and price. Gemini ranking was unavailable.",
-  }));
+    const fallbackRankings = sortedProducts.map((product, index) => ({
+      productId: product.id,
+      score: Math.max(50, 100 - index * 10),
+      reason:
+        "Fallback ranking based on actual product ratings, review counts and price. Groq ranking was unavailable.",
+    }));
 
-  ranking = {
-    rankings: fallbackRankings,
-  };
-}
+    ranking = {
+      rankings: fallbackRankings,
+    };
+  }
 
-  // Ensure Gemini returned every eligible product exactly once.
+  // Ensure Groq returned every eligible product exactly once.
   const rankingIds = ranking.rankings.map(
     (item) => item.productId,
   );
@@ -502,7 +503,7 @@ try {
     uniqueRankingIds.size !== eligible.length
   ) {
     throw new Error(
-      "Gemini returned an incomplete or duplicate product ranking.",
+      "Groq returned an incomplete or duplicate product ranking.",
     );
   }
 
@@ -516,7 +517,7 @@ try {
 
       if (!result) {
         throw new Error(
-          `Missing Gemini ranking for product ${product.id}.`,
+          `Missing Groq ranking for product ${product.id}.`,
         );
       }
 
@@ -524,8 +525,8 @@ try {
         ...product,
         score: Math.round(result.score),
         aiReason: usedFallback
-  ? `Automatic fallback: ${result.reason}`
-  : result.reason,
+          ? `Automatic fallback: ${result.reason}`
+          : result.reason,
 
         // Backend validation remains authoritative.
         requirements: product.requirements,
@@ -545,9 +546,9 @@ try {
       `. My top pick is ${top.name} from ${top.merchant} ` +
       `at $${top.price.toFixed(2)}. ` +
       "Review the product and approve before payment." +
-(usedFallback
-  ? " Gemini ranking was temporarily unavailable, so fallback ranking was used."
-  : ""),
+      (usedFallback
+        ? " Groq ranking was temporarily unavailable, so fallback ranking was used."
+        : ""),
     products: ranked,
     recommendedId: top.id,
     parsedBudget,
