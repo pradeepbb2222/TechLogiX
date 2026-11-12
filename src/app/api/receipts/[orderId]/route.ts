@@ -1,11 +1,11 @@
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import {
   buildReceipt,
   InvalidReceiptStatusError,
   MissingCaptureIdError,
 } from "@/lib/receipt/generator";
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { getStore } from "@/lib/store";
 
 const ORDER_ID_REGEX = /^[A-Za-z0-9-]{8,40}$/;
